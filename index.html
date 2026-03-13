@@ -506,6 +506,68 @@ header{
 [data-theme="dark"] .toast.ok::before { color:#34d399; }
 [data-theme="dark"] .toast.err::before { color:#f87171; }
 [data-theme="dark"] .hint { background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.3);color:var(--ink2); }
+
+/* ── HR Contact Cards ── */
+.hr-section-title {
+  font-size:.65rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink3);margin:18px 0 10px;display:flex;align-items:center;gap:8px;
+}
+.hr-section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.hrcard {
+  border:1.5px solid var(--border);border-radius:var(--r);padding:14px 16px;
+  margin-bottom:10px;background:var(--surface);transition:border-color .2s,box-shadow .2s;
+  position:relative;
+}
+.hrcard:hover{border-color:var(--blue-bdr);box-shadow:var(--shadow-sm);}
+.hrcard-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;}
+.hrcard-name{font-size:.88rem;font-weight:700;color:var(--ink);}
+.hrcard-role{font-size:.73rem;font-weight:600;color:var(--ink3);margin-top:2px;}
+.hr-tag{
+  display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;
+  font-size:.62rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  background:rgba(16,185,129,.12);color:#065f46;border:1px solid rgba(16,185,129,.25);flex-shrink:0;
+}
+[data-theme="dark"] .hr-tag{background:rgba(16,185,129,.15);color:#34d399;border-color:rgba(16,185,129,.3);}
+.hr-tag.predicted{background:rgba(245,158,11,.12);color:#92400e;border-color:rgba(245,158,11,.25);}
+[data-theme="dark"] .hr-tag.predicted{background:rgba(245,158,11,.15);color:#fbbf24;border-color:rgba(245,158,11,.3);}
+.hrcard-detail{font-size:.76rem;font-weight:500;color:var(--ink2);margin-bottom:4px;
+  display:flex;align-items:center;gap:6px;word-break:break-all;}
+.hrcard-detail .ico{font-size:.8rem;flex-shrink:0;width:14px;text-align:center;}
+.hrcard-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+.hract{
+  padding:5px 11px;border-radius:7px;border:1.5px solid var(--border);background:var(--bg2);
+  color:var(--ink2);font-family:'Inter',sans-serif;font-size:.68rem;font-weight:700;
+  letter-spacing:.04em;cursor:pointer;text-decoration:none;transition:all .18s;
+  display:inline-flex;align-items:center;gap:4px;
+}
+.hract:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+.hract.wa{border-color:rgba(37,211,102,.3);color:#128c7e;}
+.hract.wa:hover{border-color:#25d366;background:rgba(37,211,102,.08);color:#075e54;}
+.hract.li{border-color:rgba(10,102,194,.3);color:#0a66c2;}
+.hract.li:hover{border-color:#0a66c2;background:rgba(10,102,194,.08);}
+.hract.copy{border-color:var(--border2);}
+.copied-flash{color:var(--green) !important;border-color:var(--green) !important;}
+/* pattern badge */
+.epat{
+  display:inline-flex;align-items:center;gap:6px;padding:7px 12px;
+  border-radius:var(--rs);background:var(--bg2);border:1.5px solid var(--border);
+  font-size:.73rem;font-weight:600;color:var(--ink2);margin-bottom:14px;
+}
+.epat code{color:var(--blue);font-family:monospace;font-size:.78rem;}
+/* careers pill on card */
+.careers-pill{
+  display:inline-flex;align-items:center;gap:4px;font-size:.7rem;font-weight:600;
+  color:#065f46;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);
+  padding:2px 9px;border-radius:20px;text-decoration:none;margin-top:4px;
+}
+.careers-pill:hover{background:rgba(16,185,129,.18);}
+[data-theme="dark"] .careers-pill{color:#34d399;background:rgba(16,185,129,.15);border-color:rgba(16,185,129,.3);}
+/* card HR count badge */
+.hr-count-badge{
+  display:inline-flex;align-items:center;gap:4px;font-size:.68rem;font-weight:700;
+  color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-bdr);
+  padding:1px 7px;border-radius:10px;margin-left:6px;
+}
 @media(max-width:700px){
   .hero,.toolbar,.content{padding-left:20px;padding-right:20px;}
   header{padding:0 16px;}
@@ -563,14 +625,14 @@ header{
 <!-- ═══════ HERO ═══════ -->
 <div class="hero">
   <div class="hero-left">
-    <h2>Your B2B contacts,<br><span>all in one place.</span></h2>
-    <p>AI-powered contact discovery · Real company favicons · Email, phone & enquiry links — sourced from your Google Sheet</p>
+    <h2>Find HR contacts,<br><span>instantly.</span></h2>
+    <p>Discovers HR &amp; Talent Acquisition contacts · Careers pages · Email patterns · LinkedIn profiles — free, no API key needed</p>
   </div>
   <div class="hero-stats">
     <div class="hstat"><div class="hstat-n" id="sTotal">0</div><div class="hstat-l">Companies</div></div>
     <div class="hstat"><div class="hstat-n" id="sFetched">0</div><div class="hstat-l">Fetched</div></div>
-    <div class="hstat"><div class="hstat-n" id="sEmails">0</div><div class="hstat-l">Emails</div></div>
-    <div class="hstat"><div class="hstat-n" id="sPhones">0</div><div class="hstat-l">Phones</div></div>
+    <div class="hstat"><div class="hstat-n" id="sHR">0</div><div class="hstat-l">HR Contacts</div></div>
+    <div class="hstat"><div class="hstat-n" id="sCareers">0</div><div class="hstat-l">Careers Pages</div></div>
   </div>
 </div>
 
@@ -849,8 +911,9 @@ function renderAll() {
 function updateStats() {
   document.getElementById('sTotal').textContent   = companies.length;
   document.getElementById('sFetched').textContent = companies.filter(c=>cache[c.id]?.scraped).length;
-  document.getElementById('sEmails').textContent  = companies.filter(c=>cache[c.id]?.email).length;
-  document.getElementById('sPhones').textContent  = companies.filter(c=>cache[c.id]?.phone).length;
+  const hrTotal = companies.reduce((n,c) => n + (cache[c.id]?.hrContacts?.length||0), 0);
+  document.getElementById('sHR').textContent      = hrTotal;
+  document.getElementById('sCareers').textContent = companies.filter(c=>cache[c.id]?.careersPage).length;
 }
 
 function renderGrid(list) {
@@ -868,25 +931,31 @@ function cardHTML(c, i) {
   const ct = cache[c.id] || {};
   const bc  = ct.scraped ? 'br' : ct.loading ? 'bl' : 'be';
   const btx = ct.scraped ? 'fetched' : ct.loading ? 'scanning…' : 'pending';
+  const hrCount = ct.hrContacts?.length || 0;
+  const topHR = ct.hrContacts?.[0];
   return `<div class="ccard" style="animation-delay:${i*.035}s" id="cc-${c.id}" onclick="openModal('${c.id}')">
     <div class="ctop">
       <img class="cfav" id="fav-${c.id}" src="" alt="${c.name}">
       <div class="cbadge ${bc}"><div class="bdot"></div>${btx}</div>
     </div>
-    <div class="cname">${c.name}</div>
+    <div class="cname">${c.name}${hrCount>0?`<span class="hr-count-badge">👤 ${hrCount} HR</span>`:''}</div>
     ${c.offering ? `<span class="coffering" title="${c.offering}">${c.offering}</span>` : ''}
     ${c.url
       ? `<a class="curl" href="${c.url}" target="_blank" onclick="event.stopPropagation()">↗ ${dom(c.url)}</a>`
-      : (cache[c.id]?.loading
+      : (ct.loading
           ? `<span class="curl" style="color:var(--ink4)">Discovering website…</span>`
           : `<span class="curl" style="color:var(--ink4)">Website will be found on fetch</span>`)
     }
+    ${ct.careersPage ? `<a class="careers-pill" href="${ct.careersPage}" target="_blank" onclick="event.stopPropagation()">🎯 Careers Page</a>` : ''}
     <div class="cinfos">
-      <div class="ci ${ct.email?'has':''}"><span class="ico">✉</span><span>${ct.email||'Email not yet fetched'}</span></div>
+      ${topHR
+        ? `<div class="ci has"><span class="ico">👤</span><span>${topHR.name}${topHR.role?` · ${topHR.role}`:''}</span></div>`
+        : `<div class="ci ${ct.email?'has':''}"><span class="ico">✉</span><span>${ct.email||'Not yet fetched'}</span></div>`
+      }
       <div class="ci ${ct.phone?'has':''}"><span class="ico">☎</span><span>${ct.phone||'Phone not yet fetched'}</span></div>
     </div>
     <button class="cfetch" onclick="event.stopPropagation();fetchContact('${c.id}')">
-      ${ct.scraped ? '↻ Re-fetch contacts' : '→ Fetch contact info'}
+      ${ct.scraped ? '↻ Re-fetch' : '→ Fetch HR Contacts'}
     </button>
   </div>`;
 }
@@ -912,25 +981,93 @@ function openModal(id) {
 }
 function renderModal(c) {
   const ct = cache[c.id] || {};
-  if (ct.loading) { document.getElementById('mbody').innerHTML = `<div class="scanbox"><div class="spin"></div>AI is scanning ${dom(c.url||'website')} for contact details…</div>`; return; }
+  if (ct.loading) {
+    document.getElementById('mbody').innerHTML = `<div class="scanbox"><div class="spin"></div>Scanning ${dom(c.url||c.name)} — finding HR contacts, careers page, email patterns…</div>`;
+    return;
+  }
   let h = '';
-  if (c.offering) h += `<div style="margin-bottom:16px"><span class="coffering">📦 ${c.offering}</span></div>`;
-  h += `<div class="msec">Contact Details</div>
-  <div class="cgrid">
-    <a class="cb" ${ct.email?`href="mailto:${ct.email}"`:''}><div class="cblbl">✉ Email</div><div class="cbval ${ct.email?'':'empty'}">${ct.email||'Not found'}</div></a>
-    <a class="cb" ${ct.phone?`href="tel:${ct.phone}"`:''}><div class="cblbl">☎ Phone</div><div class="cbval ${ct.phone?'':'empty'}">${ct.phone||'Not found'}</div></a>
-    <a class="cb full" ${ct.contactPage?`href="${ct.contactPage}" target="_blank"`:''}><div class="cblbl">🔗 Contact / Enquiry Page</div><div class="cbval ${ct.contactPage?'':'empty'}">${ct.contactPage||'Not found'}</div></a>
-  </div>`;
-  if (ct.description) h += `<div class="msec">About</div><div style="font-size:.8rem;font-weight:500;color:var(--ink2);line-height:1.7;margin-bottom:18px;padding:13px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--rs)">${ct.description}</div>`;
-  if (ct.other) h += `<div class="msec">Other Info</div><div style="font-size:.78rem;font-weight:500;color:var(--ink2);line-height:1.7;margin-bottom:18px;padding:13px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--rs)">${ct.other}</div>`;
-  h += `<div class="msec">Actions</div><div class="arow">
-    ${c.url?`<a href="${c.url}" target="_blank" class="abtn prime">↗ Visit Website</a>`:''}
-    ${ct.email?`<a href="mailto:${ct.email}" class="abtn">✉ Send Email</a>`:''}
+
+  // ── Offerings badge ──
+  if (c.offering) h += `<div style="margin-bottom:14px"><span class="coffering">📦 ${c.offering}</span></div>`;
+
+  // ── Quick links row ──
+  h += `<div class="arow" style="margin-bottom:18px">
+    ${c.url?`<a href="${c.url}" target="_blank" class="abtn prime">↗ Website</a>`:''}
+    ${ct.careersPage?`<a href="${ct.careersPage}" target="_blank" class="abtn" style="color:#065f46;border-color:rgba(16,185,129,.35)">🎯 Careers Page</a>`:''}
     ${ct.contactPage?`<a href="${ct.contactPage}" target="_blank" class="abtn">📝 Enquiry Form</a>`:''}
-    <button class="abtn" onclick="fetchContact('${c.id}')">${ct.scraped?'↻ Re-fetch':'⟳ Fetch Contacts'}</button>
+    ${ct.linkedinSearch?`<a href="${ct.linkedinSearch}" target="_blank" class="abtn li" style="font-size:.7rem">🔎 Search HR on LinkedIn</a>`:''}
+    <button class="abtn" onclick="fetchContact('${c.id}')">${ct.scraped?'↻ Re-fetch':'⟳ Fetch HR Contacts'}</button>
   </div>`;
-  if (!ct.scraped&&!ct.loading) h += `<div class="hint">Click "Fetch Contacts" — AI will use the company name and primary offerings to find the most relevant contact details.</div>`;
+
+  // ── General contact ──
+  h += `<div class="hr-section-title">Company Contact</div>
+  <div class="cgrid" style="margin-bottom:16px">
+    <a class="cb" ${ct.email?`href="mailto:${ct.email}"`:''}><div class="cblbl">✉ General Email</div><div class="cbval ${ct.email?'':'empty'}">${ct.email||'Not found'}</div></a>
+    <a class="cb" ${ct.phone?`href="tel:${ct.phone}"`:''}><div class="cblbl">☎ Phone</div><div class="cbval ${ct.phone?'':'empty'}">${ct.phone||'Not found'}</div></a>
+  </div>`;
+
+  // ── Email pattern ──
+  if (ct.emailPattern) {
+    h += `<div class="epat">📐 Email pattern detected: <code>${ct.emailPattern}</code></div>`;
+  }
+
+  // ── HR Contacts ──
+  const hrs = ct.hrContacts || [];
+  if (hrs.length > 0) {
+    h += `<div class="hr-section-title">HR & Talent Acquisition Contacts (${hrs.length} found)</div>`;
+    hrs.forEach(p => {
+      const emailLink = p.email ? `href="mailto:${p.email}"` : '';
+      const waLink   = p.phone ? `https://wa.me/${p.phone.replace(/[^0-9]/g,'')}` : '';
+      h += `<div class="hrcard">
+        <div class="hrcard-top">
+          <div>
+            <div class="hrcard-name">${p.name||'HR Contact'}</div>
+            ${p.role?`<div class="hrcard-role">${p.role}</div>`:''}
+          </div>
+          <span class="hr-tag ${p.predicted?'predicted':''}">${p.predicted?'Predicted':'Found'}</span>
+        </div>
+        ${p.email?`<div class="hrcard-detail"><span class="ico">✉</span>${p.email}</div>`:''}
+        ${p.phone?`<div class="hrcard-detail"><span class="ico">☎</span>${p.phone}</div>`:''}
+        ${p.linkedin?`<div class="hrcard-detail"><span class="ico">in</span><a href="${p.linkedin}" target="_blank" style="color:var(--blue);text-decoration:none">${p.linkedin.replace('https://','')}</a></div>`:''}
+        <div class="hrcard-actions">
+          ${p.email?`<a class="hract" ${emailLink}>✉ Email</a>`:''}
+          ${p.linkedin?`<a class="hract li" href="${p.linkedin}" target="_blank">in LinkedIn</a>`:''}
+          ${waLink?`<a class="hract wa" href="${waLink}" target="_blank">💬 WhatsApp</a>`:''}
+          ${p.email?`<button class="hract copy" onclick="copyHR(this,'${p.email}')">⎘ Copy Email</button>`:''}
+          ${(p.email||p.phone||p.name)?`<button class="hract copy" onclick="copyHR(this,${JSON.stringify((p.name?p.name+' — ':'')+[p.role,p.email,p.phone,p.linkedin].filter(Boolean).join(' | '))})">📋 Copy All</button>`:''}
+        </div>
+      </div>`;
+    });
+  } else if (ct.scraped) {
+    h += `<div class="hr-section-title">HR Contacts</div>
+    <div style="padding:16px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);font-size:.78rem;color:var(--ink3);margin-bottom:16px">
+      No HR contacts found on the website.<br>
+      ${ct.linkedinSearch?`<a href="${ct.linkedinSearch}" target="_blank" style="color:var(--blue);font-weight:600">🔎 Try searching HR contacts on LinkedIn →</a>`:``}
+    </div>`;
+  }
+
+  // ── LinkedIn search ──
+  if (ct.linkedinSearch && hrs.length === 0) {
+    // already shown in empty state above
+  }
+
+  // ── Other (social links) ──
+  if (ct.other) h += `<div class="hr-section-title">Social & Other</div><div style="font-size:.78rem;font-weight:500;color:var(--ink2);line-height:1.7;margin-bottom:14px;padding:11px 13px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--rs)">${ct.other}</div>`;
+
+  if (!ct.scraped && !ct.loading) {
+    h += `<div class="hint">Click "Fetch HR Contacts" to scrape the company's website for HR team members, email patterns, careers page, and enquiry form.</div>`;
+  }
+
   document.getElementById('mbody').innerHTML = h;
+}
+
+function copyHR(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.innerHTML;
+    btn.innerHTML = '✓ Copied!';
+    btn.classList.add('copied-flash');
+    setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied-flash'); }, 1800);
+  }).catch(() => toast('Copy failed', 'err'));
 }
 function closeMod(e) {
   if (e && e.target!==document.getElementById('moverlay')) return;
@@ -939,17 +1076,28 @@ function closeMod(e) {
 
 /* ── CONTACT FETCH ── */
 /* ═══════════════════════════════════════════════════════════
-   FREE SCRAPER — no API key, no cost
-   Uses free CORS proxies to fetch the company's own website,
-   then extracts emails, phones, contact links via regex.
-   Proxy chain: allorigins → corsproxy.io → codetabs
+   HR CONTACT DISCOVERY ENGINE
+   Free, no API key. Scrapes company website via CORS proxies.
+   Finds: HR contacts · email patterns · careers page ·
+          enquiry form · LinkedIn profiles · phone numbers
 ═══════════════════════════════════════════════════════════ */
 
-const CONTACT_SLUGS = [
-  '/contact', '/contact-us', '/contactus', '/get-in-touch',
-  '/reach-us', '/connect', '/about/contact', '/support',
-  '/help', '/enquiry', '/enquire', '/about-us',
+// HR role keywords — ranked by relevance
+const HR_ROLES = [
+  'talent acquisition','head of talent','talent partner',
+  'hr manager','hr head','head of hr','chief people',
+  'people operations','people & culture','people partner',
+  'hr business partner','hrbp','human resources',
+  'campus recruiter','technical recruiter','recruiter',
+  'recruitment','staffing','workforce',
 ];
+
+// HR-specific email prefixes (highest priority)
+const HR_EMAIL_PREFIXES = ['hr','talent','careers','recruitment','people','jobs','hiring','recruit'];
+
+// Careers page slugs
+const CAREERS_SLUGS = ['/careers','/jobs','/join-us','/work-with-us','/opportunities',
+  '/join','/we-are-hiring','/open-positions','/current-openings','/vacancies'];
 
 /* proxyFetch — races all 3 proxies simultaneously, returns whichever wins first.
    Max wait: 7s total instead of 9s per proxy sequentially. */
@@ -995,67 +1143,214 @@ async function proxyFetch(url) {
   }
 }
 
-function extractFromHtml(html, result) {
-  if (!html) return;
-  // Strip scripts/styles to reduce noise
-  const clean = html
+/* ── cleanHtml: strip noise ── */
+function cleanHtml(html) {
+  return (html||'')
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '');
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<[^>]+>/g, ' ')     // strip tags → spaces
+    .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&nbsp;/g,' ')
+    .replace(/\s+/g,' ');
+}
 
-  // Email — prefer mailto: links, then regex
+/* ── extractBasicContacts: email, phone, social from raw HTML ── */
+function extractBasicContacts(html, result) {
+  if (!html) return;
+  const raw = html; // keep raw for href extraction
+
+  // ── Email: HR prefixes first, then any mailto, then regex ──
   if (!result.email) {
-    const mto = clean.match(/href=["']mailto:([^"'?\s&]+)/i);
-    if (mto) {
-      result.email = decodeURIComponent(mto[1]).toLowerCase().trim();
-    } else {
-      const em = clean.match(/\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b/);
+    // 1. HR-specific mailto
+    for (const pfx of HR_EMAIL_PREFIXES) {
+      const re = new RegExp(`href=["']mailto:(${pfx}[^"'?\s&]*)`, 'i');
+      const m = raw.match(re);
+      if (m) { result.email = decodeURIComponent(m[1]).toLowerCase().trim(); break; }
+    }
+    // 2. Any mailto
+    if (!result.email) {
+      const mto = raw.match(/href=["']mailto:([^"'?\s&]+)/i);
+      if (mto) result.email = decodeURIComponent(mto[1]).toLowerCase().trim();
+    }
+    // 3. Regex in plain text
+    if (!result.email) {
+      const txt = cleanHtml(raw);
+      const em = txt.match(/\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b/);
       if (em && !/\.(png|jpg|gif|svg|css|js)$/.test(em[1])) result.email = em[1].toLowerCase();
     }
   }
 
-  // Phone — prefer tel: links
+  // ── Phone: tel: href first, then patterns ──
   if (!result.phone) {
-    const tel = clean.match(/href=["']tel:([^"'\s]+)/i);
+    const tel = raw.match(/href=["']tel:([^"'\s]+)/i);
     if (tel) {
       result.phone = decodeURIComponent(tel[1]).trim();
     } else {
-      const patterns = [
+      const txt = cleanHtml(raw);
+      for (const p of [
         /(\+91[\s\-]?[6-9]\d{9})/,
         /(\+91[\s\-]?\d{2,4}[\s\-]?\d{6,8})/,
         /(\+1[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4})/,
         /(\+\d{1,3}[\s\-]?\d{8,12})/,
         /(\(?\d{3}\)?[\s\-\.]\d{3}[\s\-\.]\d{4})/,
-      ];
-      for (const p of patterns) {
-        const m = clean.match(p);
+      ]) {
+        const m = txt.match(p);
         if (m) { result.phone = m[1].trim(); break; }
       }
     }
   }
 
-  // Social links
-  if (!result.linkedin) {
-    const li = clean.match(/href=["'](https?:\/\/(?:www\.)?linkedin\.com\/company\/[^"'\s/][^"'\s]*)/i);
-    if (li) result.linkedin = li[1];
+  // ── Social links ──
+  if (!result.companyLinkedin) {
+    const li = raw.match(/href=["'](https?:\/\/(?:www\.)?linkedin\.com\/company\/[^"'\s/?#][^"'\s]*)/i);
+    if (li) result.companyLinkedin = li[1].split('?')[0];
   }
   if (!result.twitter) {
-    const tw = clean.match(/href=["'](https?:\/\/(?:www\.)?(?:twitter|x)\.com\/[^"'\s/][^"'\s]*)/i);
-    if (tw) result.twitter = tw[1];
+    const tw = raw.match(/href=["'](https?:\/\/(?:www\.)?(?:twitter|x)\.com\/(?!share|intent)[^"'\s/?#][^"'\s]*)/i);
+    if (tw) result.twitter = tw[1].split('?')[0];
   }
+
+  // ── Collect all emails found on page (for pattern detection) ──
+  const allEmails = [];
+  for (const m of raw.matchAll(/href=["']mailto:([^"'?\s&]+)/gi)) {
+    const e = decodeURIComponent(m[1]).toLowerCase().trim();
+    if (e.includes('@') && !allEmails.includes(e)) allEmails.push(e);
+  }
+  const txt2 = cleanHtml(raw);
+  for (const m of txt2.matchAll(/\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b/g)) {
+    const e = m[1].toLowerCase();
+    if (!allEmails.includes(e) && !/\.(png|jpg|gif|svg|css|js)$/.test(e)) allEmails.push(e);
+  }
+  if (allEmails.length) result._allEmails = (result._allEmails||[]).concat(allEmails);
+}
+
+/* ── detectEmailPattern: finds firstname.lastname@domain pattern ── */
+function detectEmailPattern(emails, domain) {
+  if (!emails || !domain) return null;
+  const domEmails = emails.filter(e => e.endsWith('@' + domain) || e.includes('@' + domain));
+  for (const e of domEmails) {
+    const local = e.split('@')[0];
+    if (/^[a-z]+\.[a-z]+$/.test(local)) return 'firstname.lastname@' + domain;
+    if (/^[a-z]+_[a-z]+$/.test(local)) return 'firstname_lastname@' + domain;
+    if (/^[a-z]\.[a-z]+$/.test(local)) return 'f.lastname@' + domain;
+    if (/^[a-z]{1}[a-z]+$/.test(local) && local.length > 4) return 'firstnamelastname@' + domain;
+  }
+  return null;
+}
+
+/* ── extractHRContacts: find HR people on team/about/careers pages ── */
+function extractHRContacts(html, domain) {
+  if (!html) return [];
+  const txt = cleanHtml(html);
+  const contacts = [];
+  const seen = new Set();
+
+  // Strategy: look for name + HR role pairs within 300 chars of each other
+  // Build a combined HR roles pattern
+  const rolePattern = HR_ROLES.map(r => r.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
+  const roleRe = new RegExp(`([A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+){1,3})(?:[^.]{0,250}?)(${rolePattern})|(${rolePattern})(?:[^.]{0,250}?)([A-Z][a-zA-Z]+(?:\\s+[A-Z][a-zA-Z]+){1,3})`, 'gi');
+
+  for (const m of txt.matchAll(roleRe)) {
+    const name = (m[1] || m[4] || '').trim();
+    const role = (m[2] || m[3] || '').trim();
+    if (!name || name.split(' ').length < 2) continue;
+    // Filter out non-name false positives
+    const skip = /^(our|the|and|for|with|from|that|this|your|we|hr|talent|about|contact|learn|more|read|view|join|team|all|any|both|each|few|more|most|other|some|such|very|can|may|will|shall|has|have|been|were|are|was|be|do|did|does|its|his|her|their|they|when|what|where|which|who|why|how)$/i;
+    const words = name.split(' ');
+    if (words.some(w => skip.test(w))) continue;
+    if (name.length > 40 || name.length < 4) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    // Try to find their email
+    let email = null;
+    const fn = words[0].toLowerCase();
+    const ln = words[words.length-1].toLowerCase();
+    if (domain) {
+      // Check if any collected emails match this name
+      const raw2 = html;
+      for (const pat of [
+        `${fn}.${ln}@${domain}`, `${fn}${ln}@${domain}`,
+        `${fn[0]}.${ln}@${domain}`, `${fn}@${domain}`
+      ]) {
+        if (raw2.toLowerCase().includes(pat)) { email = pat; break; }
+      }
+    }
+
+    // Try to find their LinkedIn
+    let linkedin = null;
+    const liRe = new RegExp(`linkedin\.com\/in\/${fn}[^"'\s]*`, 'i');
+    const liM = html.match(liRe);
+    if (liM) linkedin = 'https://' + liM[0];
+
+    contacts.push({ name, role: role||'HR / Talent', email, phone: null, linkedin, predicted: false });
+    if (contacts.length >= 8) break; // cap at 8
+  }
+  return contacts;
+}
+
+/* ── predictHREmails: generate predicted emails from LinkedIn names + pattern ── */
+function predictHREmails(hrNames, pattern, domain) {
+  if (!pattern || !domain || !hrNames.length) return [];
+  const predicted = [];
+  for (const name of hrNames) {
+    if (name.email) continue; // already has email
+    const words = name.name.trim().split(/\s+/);
+    if (words.length < 2) continue;
+    const fn = words[0].toLowerCase().replace(/[^a-z]/g,'');
+    const ln = words[words.length-1].toLowerCase().replace(/[^a-z]/g,'');
+    let email = null;
+    if (pattern.startsWith('firstname.lastname'))      email = `${fn}.${ln}@${domain}`;
+    else if (pattern.startsWith('firstname_lastname')) email = `${fn}_${ln}@${domain}`;
+    else if (pattern.startsWith('f.lastname'))         email = `${fn[0]}.${ln}@${domain}`;
+    else if (pattern.startsWith('firstnamelastname'))  email = `${fn}${ln}@${domain}`;
+    if (email) predicted.push({ ...name, email, predicted: true });
+    else predicted.push(name);
+  }
+  return predicted;
+}
+
+/* ── findSpecialLinks: contact/enquiry page, careers page ── */
+function findSpecialLinks(html, baseUrl) {
+  if (!html) return { contactPage: null, careersPage: null };
+  const resolve = h => {
+    if (!h) return null;
+    if (h.startsWith('http')) return h.split('?')[0];
+    if (h.startsWith('/')) { try { return new URL(h, baseUrl).href.split('?')[0]; } catch(_){} }
+    return null;
+  };
+
+  let contactPage = null, careersPage = null;
+
+  // Contact/enquiry
+  const cRe = /href=["']([^"']*(?:contact|enquir|reach-us|get-in-touch)[^"']*)/gi;
+  for (const m of html.matchAll(cRe)) {
+    const u = resolve(m[1]);
+    if (u && !u.includes('linkedin') && !u.includes('twitter')) { contactPage = u; break; }
+  }
+
+  // Careers/jobs
+  const jRe = /href=["']([^"']*(?:career|jobs?|join-us|work-with-us|opportunities|vacancies|open-position)[^"']*)/gi;
+  for (const m of html.matchAll(jRe)) {
+    const u = resolve(m[1]);
+    if (u && !u.includes('linkedin') && !u.includes('twitter') && !u.includes('glassdoor') && !u.includes('naukri') && !u.includes('indeed')) {
+      careersPage = u; break;
+    }
+  }
+
+  return { contactPage, careersPage };
+}
+
+/* ── buildLinkedInSearch: open LinkedIn people search for HR at this company ── */
+function buildLinkedInSearch(companyName) {
+  const q = `HR OR "Talent Acquisition" OR Recruiter OR "People Operations" "${companyName}"`;
+  return `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(q)}`;
 }
 
 function findContactLink(html, baseUrl) {
-  if (!html) return null;
-  const re = /href=["']([^"']*(?:contact|reach|get-in-touch|enquir|support|connect)[^"']*)/gi;
-  for (const m of html.matchAll(re)) {
-    const h = m[1];
-    if (h.startsWith('http')) return h;
-    if (h.startsWith('/')) {
-      try { return new URL(h, baseUrl).href; } catch(_) {}
-    }
-  }
-  return null;
+  // kept for backwards compat — delegates to findSpecialLinks
+  return findSpecialLinks(html, baseUrl).contactPage;
 }
 
 /* ── Discover website URL from company name via DuckDuckGo ── */
@@ -1105,10 +1400,14 @@ async function fetchContact(id) {
   const el = document.getElementById(`cc-${id}`); if (el) el.outerHTML = cardHTML(c, 0);
   if (openModalId === id) renderModal(c);
 
-  const result = { email: null, phone: null, contactPage: null, linkedin: null, twitter: null };
+  const result = {
+    email: null, phone: null, contactPage: null, careersPage: null,
+    companyLinkedin: null, twitter: null,
+    _allEmails: [], hrContacts: [],
+  };
 
   try {
-    // Step 0: Auto-discover URL if not set
+    // ── Step 0: Auto-discover URL ──────────────────────────────────────────
     let siteUrl = c.url;
     if (!siteUrl) {
       toast(`Finding website for ${c.name}…`, 'ok');
@@ -1116,73 +1415,118 @@ async function fetchContact(id) {
       if (siteUrl) {
         c.url = norm(siteUrl);
         saveStore();
-        toast(`Found: ${dom(siteUrl)} — now scraping…`, 'ok');
-        // Refresh favicon now that we have a URL
         const favEl = document.getElementById(`fav-${id}`);
         if (favEl) setFavWithFallback(favEl, c.url, c.name);
       } else {
-        throw new Error(`Could not find a website for "${c.name}" — add URL manually`);
+        throw new Error(`Could not find a website for "${c.name}" — add URL manually in Admin`);
       }
-    } else {
-      toast(`Scanning ${c.name}…`, 'ok');
     }
+    toast(`Scanning ${c.name} for HR contacts…`, 'ok');
 
-    // 1. Fetch homepage + /contact page simultaneously — don't wait for one before starting the other
-    const base = siteUrl.replace(/\/$/, '');
-    const contactUrl = base + '/contact';
-    const contactUsUrl = base + '/contact-us';
+    const base   = siteUrl.replace(/\/$/, '');
+    const domain = dom(siteUrl);
 
-    const [homeHtml, contactHtml, contactUsHtml] = await Promise.all([
+    // ── Step 1: Parallel fetch — home + contact + careers + about ─────────
+    const [homeHtml, contactHtml, contactUsHtml, careersHtml, aboutHtml] = await Promise.all([
       proxyFetch(siteUrl),
-      proxyFetch(contactUrl),
-      proxyFetch(contactUsUrl),
+      proxyFetch(base + '/contact'),
+      proxyFetch(base + '/contact-us'),
+      proxyFetch(base + '/careers'),
+      proxyFetch(base + '/about'),
     ]);
 
-    // Extract from all pages — earlier pages take precedence (won't overwrite found values)
-    extractFromHtml(homeHtml, result);
-    extractFromHtml(contactHtml, result);
-    extractFromHtml(contactUsHtml, result);
+    // Extract basic contacts from all pages
+    [homeHtml, contactHtml, contactUsHtml].forEach(h => extractBasicContacts(h, result));
 
-    // Set contact page URL to whichever returned data
-    if (!result.contactPage) {
-      if (contactHtml && contactHtml.length > 500)   result.contactPage = contactUrl;
-      else if (contactUsHtml && contactUsHtml.length > 500) result.contactPage = contactUsUrl;
+    // ── Step 2: Find special links from homepage HTML ──────────────────────
+    if (homeHtml) {
+      const links = findSpecialLinks(homeHtml, siteUrl);
+      if (!result.contactPage) result.contactPage = links.contactPage;
+      if (!result.careersPage)  result.careersPage  = links.careersPage;
     }
 
-    // 2. If still no email/phone, check the contact link found in homepage HTML
-    if (homeHtml && !result.email && !result.phone) {
-      const discovered = findContactLink(homeHtml, siteUrl);
-      if (discovered && discovered !== contactUrl && discovered !== contactUsUrl) {
-        result.contactPage = discovered;
-        const dHtml = await proxyFetch(discovered);
-        extractFromHtml(dHtml, result);
+    // Resolve contact page URL from fetched pages
+    if (!result.contactPage) {
+      if (contactHtml   && contactHtml.length   > 500) result.contactPage = base + '/contact';
+      else if (contactUsHtml && contactUsHtml.length > 500) result.contactPage = base + '/contact-us';
+    }
+
+    // Careers from fetched page or slug
+    if (careersHtml && careersHtml.length > 500 && !result.careersPage) {
+      result.careersPage = base + '/careers';
+    } else if (!result.careersPage) {
+      // Try careers slugs in background (non-blocking best-effort)
+      for (const slug of CAREERS_SLUGS) {
+        if (result.careersPage) break;
+        const h = await proxyFetch(base + slug);
+        if (h && h.length > 500) { result.careersPage = base + slug; break; }
       }
     }
 
+    // Extract from contact + careers pages too
+    if (contactHtml)  extractBasicContacts(contactHtml, result);
+    if (careersHtml)  extractBasicContacts(careersHtml, result);
+    if (aboutHtml)    extractBasicContacts(aboutHtml, result);
+
+    // ── Step 3: HR contact extraction from team/about/careers pages ────────
+    const hrFromAbout   = extractHRContacts(aboutHtml, domain);
+    const hrFromCareers = extractHRContacts(careersHtml, domain);
+    const hrFromHome    = extractHRContacts(homeHtml, domain);
+
+    // Fetch /team page too
+    const teamHtml = await proxyFetch(base + '/team');
+    const hrFromTeam = extractHRContacts(teamHtml, domain);
+    if (teamHtml) extractBasicContacts(teamHtml, result);
+
+    // Merge HR contacts, deduplicate by name
+    const allHR = [...hrFromAbout, ...hrFromTeam, ...hrFromCareers, ...hrFromHome];
+    const hrSeen = new Set();
+    const hrContacts = allHR.filter(p => {
+      const k = p.name.toLowerCase();
+      if (hrSeen.has(k)) return false;
+      hrSeen.add(k); return true;
+    }).slice(0, 8);
+
+    // ── Step 4: Detect email pattern + predict HR emails ───────────────────
+    const allEmails = result._allEmails || [];
+    const emailPattern = detectEmailPattern(allEmails, domain);
+
+    // Predict emails for HR contacts that don't have one
+    const hrWithEmails = predictHREmails(hrContacts, emailPattern, domain);
+
+    // ── Step 5: Build LinkedIn HR search URL ───────────────────────────────
+    const linkedinSearch = buildLinkedInSearch(c.name);
+
+    // ── Assemble other info ────────────────────────────────────────────────
     const other = [
-      result.linkedin ? 'LinkedIn: ' + result.linkedin : null,
-      result.twitter  ? 'Twitter/X: ' + result.twitter : null,
+      result.companyLinkedin ? 'Company LinkedIn: ' + result.companyLinkedin : null,
+      result.twitter         ? 'Twitter/X: ' + result.twitter : null,
     ].filter(Boolean).join(' | ') || null;
 
-    const scraped = !!(result.email || result.phone || result.contactPage);
-    // ── Persist: merge with any existing good data rather than overwriting ──
+    const scraped = !!(result.email || result.phone || result.contactPage || hrWithEmails.length || result.careersPage);
+
+    // ── Persist — merge, never wipe ────────────────────────────────────────
     const existing = cache[id] || {};
     cache[id] = {
-      email:       result.email       || existing.email       || null,
-      phone:       result.phone       || existing.phone       || null,
-      contactPage: result.contactPage || existing.contactPage || null,
-      other:       other              || existing.other       || null,
+      email:         result.email         || existing.email         || null,
+      phone:         result.phone         || existing.phone         || null,
+      contactPage:   result.contactPage   || existing.contactPage   || null,
+      careersPage:   result.careersPage   || existing.careersPage   || null,
+      emailPattern:  emailPattern         || existing.emailPattern  || null,
+      hrContacts:    hrWithEmails.length  ? hrWithEmails : (existing.hrContacts || []),
+      linkedinSearch: linkedinSearch,
+      other:         other                || existing.other         || null,
       loading: false,
       scraped: scraped || !!existing.scraped,
       fetchedAt: Date.now(),
     };
     saveStore();
 
-    if (scraped) toast(`✓ Contacts found for ${c.name}`, 'ok');
+    const hrCount = hrWithEmails.length;
+    if (scraped) toast(`✓ ${c.name} — ${hrCount} HR contact${hrCount!==1?'s':''} found`, 'ok');
     else toast(`${c.name} — nothing found (site may block scrapers)`, 'err');
 
   } catch(e) {
-    // ── Persistence fix: on error, preserve any previously fetched data ──
     const prev = cache[id] || {};
     cache[id] = { ...prev, loading: false };
     if (!prev.scraped) cache[id].scraped = false;
@@ -1193,7 +1537,6 @@ async function fetchContact(id) {
   updateStats();
   const el2 = document.getElementById(`cc-${id}`); if (el2) el2.outerHTML = cardHTML(c, 0);
   if (openModalId === id) renderModal(c);
-  // Re-apply favicon after card re-render
   const newImg = document.getElementById(`fav-${id}`);
   if (newImg) setFavWithFallback(newImg, c.url, c.name);
 }
