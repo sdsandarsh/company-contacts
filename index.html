@@ -530,6 +530,8 @@ header{
 [data-theme="dark"] .hr-tag{background:rgba(16,185,129,.15);color:#34d399;border-color:rgba(16,185,129,.3);}
 .hr-tag.predicted{background:rgba(245,158,11,.12);color:#92400e;border-color:rgba(245,158,11,.25);}
 [data-theme="dark"] .hr-tag.predicted{background:rgba(245,158,11,.15);color:#fbbf24;border-color:rgba(245,158,11,.3);}
+.hr-tag.apollo{background:rgba(99,102,241,.12);color:#4338ca;border-color:rgba(99,102,241,.25);}
+[data-theme="dark"] .hr-tag.apollo{background:rgba(99,102,241,.15);color:#818cf8;border-color:rgba(99,102,241,.3);}
 .hrcard-detail{font-size:.76rem;font-weight:500;color:var(--ink2);margin-bottom:4px;
   display:flex;align-items:center;gap:6px;word-break:break-all;}
 .hrcard-detail .ico{font-size:.8rem;flex-shrink:0;width:14px;text-align:center;}
@@ -758,6 +760,9 @@ function doUnlock() {
     if (v === ADMIN_PW) { isAdmin = true; document.getElementById('adminBtn').classList.add('on'); }
     document.getElementById('lockScreen').style.display = 'none';
     loadStore(); renderAll(); syncSheet();
+    if (!getApolloKey()) {
+      setTimeout(() => toast('💡 Tip: Add an Apollo.io key in Admin → 🔑 API Keys for richer HR results', 'ok'), 2000);
+    }
   } else {
     document.getElementById('lockErr').textContent = 'Incorrect password — please try again.';
     document.getElementById('lockPw').value = '';
@@ -1024,7 +1029,7 @@ function renderModal(c) {
             <div class="hrcard-name">${p.name||'HR Contact'}</div>
             ${p.role?`<div class="hrcard-role">${p.role}</div>`:''}
           </div>
-          <span class="hr-tag ${p.predicted?'predicted':''}">${p.predicted?'Predicted':'Found'}</span>
+          <span class="hr-tag ${p.predicted?'predicted':p.source==='Apollo'?'apollo':''}">${p.predicted?'Predicted':p.source==='Apollo'?'Apollo':'Found'}</span>
         </div>
         ${p.email?`<div class="hrcard-detail"><span class="ico">✉</span>${p.email}</div>`:''}
         ${p.phone?`<div class="hrcard-detail"><span class="ico">☎</span>${p.phone}</div>`:''}
@@ -1407,26 +1412,49 @@ async function fetchContact(id) {
   };
 
   try {
-    // ── Step 0: Auto-discover URL ──────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════
+    // STEP 0 — Discover website URL if not already known
+    // ══════════════════════════════════════════════════════════════════
     let siteUrl = c.url;
     if (!siteUrl) {
       toast(`Finding website for ${c.name}…`, 'ok');
-      siteUrl = await discoverUrl(c.name);
-      if (siteUrl) {
-        c.url = norm(siteUrl);
+      // Try Apollo org search first — it knows websites for most companies
+      const apolloOrg = await apolloOrgSearch(c.name);
+      if (apolloOrg?.website) {
+        siteUrl = norm(apolloOrg.website);
+        c.url = siteUrl;
+        if (apolloOrg.linkedin && !result.companyLinkedin) result.companyLinkedin = apolloOrg.linkedin;
+        if (apolloOrg.phone    && !result.phone)           result.phone           = apolloOrg.phone;
         saveStore();
-        const favEl = document.getElementById(`fav-${id}`);
-        if (favEl) setFavWithFallback(favEl, c.url, c.name);
       } else {
-        throw new Error(`Could not find a website for "${c.name}" — add URL manually in Admin`);
+        siteUrl = await discoverUrl(c.name);
+        if (siteUrl) { c.url = norm(siteUrl); saveStore(); }
+        else throw new Error(`Could not find a website for "${c.name}" — add it manually in Admin`);
       }
+      const favEl = document.getElementById(`fav-${id}`);
+      if (favEl) setFavWithFallback(favEl, c.url, c.name);
     }
-    toast(`Scanning ${c.name} for HR contacts…`, 'ok');
 
     const base   = siteUrl.replace(/\/$/, '');
     const domain = dom(siteUrl);
 
-    // ── Step 1: Parallel fetch — home + contact + careers + about ─────────
+    // ══════════════════════════════════════════════════════════════════
+    // STEP 1 — Apollo people search (if key set)
+    // ══════════════════════════════════════════════════════════════════
+    let apolloContacts = null;
+    const apolloKey = getApolloKey();
+
+    if (apolloKey) {
+      toast(`🔍 Searching Apollo for HR contacts at ${c.name}…`, 'ok');
+      apolloContacts = await apolloSearch(c.name, domain);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // STEP 2 — Website scraping (always runs — finds careers page,
+    //          contact page, general email, phone, even if Apollo ran)
+    // ══════════════════════════════════════════════════════════════════
+    toast(`Scanning ${c.name} website…`, 'ok');
+
     const [homeHtml, contactHtml, contactUsHtml, careersHtml, aboutHtml] = await Promise.all([
       proxyFetch(siteUrl),
       proxyFetch(base + '/contact'),
@@ -1435,87 +1463,97 @@ async function fetchContact(id) {
       proxyFetch(base + '/about'),
     ]);
 
-    // Extract basic contacts from all pages
-    [homeHtml, contactHtml, contactUsHtml].forEach(h => extractBasicContacts(h, result));
+    [homeHtml, contactHtml, contactUsHtml, careersHtml, aboutHtml]
+      .forEach(h => extractBasicContacts(h, result));
 
-    // ── Step 2: Find special links from homepage HTML ──────────────────────
     if (homeHtml) {
       const links = findSpecialLinks(homeHtml, siteUrl);
       if (!result.contactPage) result.contactPage = links.contactPage;
       if (!result.careersPage)  result.careersPage  = links.careersPage;
     }
-
-    // Resolve contact page URL from fetched pages
     if (!result.contactPage) {
-      if (contactHtml   && contactHtml.length   > 500) result.contactPage = base + '/contact';
-      else if (contactUsHtml && contactUsHtml.length > 500) result.contactPage = base + '/contact-us';
+      if (contactHtml?.length   > 500) result.contactPage = base + '/contact';
+      else if (contactUsHtml?.length > 500) result.contactPage = base + '/contact-us';
     }
+    if (careersHtml?.length > 500 && !result.careersPage) result.careersPage = base + '/careers';
 
-    // Careers from fetched page or slug
-    if (careersHtml && careersHtml.length > 500 && !result.careersPage) {
-      result.careersPage = base + '/careers';
-    } else if (!result.careersPage) {
-      // Try careers slugs in background (non-blocking best-effort)
+    // Try careers slugs if still missing
+    if (!result.careersPage) {
       for (const slug of CAREERS_SLUGS) {
-        if (result.careersPage) break;
         const h = await proxyFetch(base + slug);
-        if (h && h.length > 500) { result.careersPage = base + slug; break; }
+        if (h?.length > 500) { result.careersPage = base + slug; break; }
       }
     }
 
-    // Extract from contact + careers pages too
-    if (contactHtml)  extractBasicContacts(contactHtml, result);
-    if (careersHtml)  extractBasicContacts(careersHtml, result);
-    if (aboutHtml)    extractBasicContacts(aboutHtml, result);
+    // ══════════════════════════════════════════════════════════════════
+    // STEP 3 — Build final HR contacts list
+    //   Apollo results take priority; free scraper fills gaps
+    // ══════════════════════════════════════════════════════════════════
+    let hrContacts = [];
 
-    // ── Step 3: HR contact extraction from team/about/careers pages ────────
-    const hrFromAbout   = extractHRContacts(aboutHtml, domain);
-    const hrFromCareers = extractHRContacts(careersHtml, domain);
-    const hrFromHome    = extractHRContacts(homeHtml, domain);
+    if (apolloContacts && apolloContacts.length > 0) {
+      // Apollo found people — use them as the primary list
+      hrContacts = apolloContacts;
 
-    // Fetch /team page too
-    const teamHtml = await proxyFetch(base + '/team');
-    const hrFromTeam = extractHRContacts(teamHtml, domain);
-    if (teamHtml) extractBasicContacts(teamHtml, result);
+      // Also run free scraper on team/about pages to fill in anyone Apollo missed
+      const teamHtml  = await proxyFetch(base + '/team');
+      const hrFromWeb = [
+        ...extractHRContacts(aboutHtml, domain),
+        ...extractHRContacts(teamHtml, domain),
+      ];
+      // Merge: add web-scraped contacts not already in Apollo results
+      const apolloNames = new Set(hrContacts.map(p => p.name.toLowerCase()));
+      for (const p of hrFromWeb) {
+        if (!apolloNames.has(p.name.toLowerCase())) hrContacts.push(p);
+      }
 
-    // Merge HR contacts, deduplicate by name
-    const allHR = [...hrFromAbout, ...hrFromTeam, ...hrFromCareers, ...hrFromHome];
-    const hrSeen = new Set();
-    const hrContacts = allHR.filter(p => {
-      const k = p.name.toLowerCase();
-      if (hrSeen.has(k)) return false;
-      hrSeen.add(k); return true;
-    }).slice(0, 8);
+    } else {
+      // No Apollo key or Apollo returned nothing — full free scraper
+      const teamHtml = await proxyFetch(base + '/team');
+      if (teamHtml) extractBasicContacts(teamHtml, result);
 
-    // ── Step 4: Detect email pattern + predict HR emails ───────────────────
-    const allEmails = result._allEmails || [];
+      const allHR = [
+        ...extractHRContacts(aboutHtml, domain),
+        ...extractHRContacts(teamHtml, domain),
+        ...extractHRContacts(careersHtml, domain),
+        ...extractHRContacts(homeHtml, domain),
+      ];
+      const hrSeen = new Set();
+      hrContacts = allHR.filter(p => {
+        const k = p.name.toLowerCase();
+        if (hrSeen.has(k)) return false;
+        hrSeen.add(k); return true;
+      }).slice(0, 8);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // STEP 4 — Email pattern detection + predict missing emails
+    // ══════════════════════════════════════════════════════════════════
+    const allEmails    = result._allEmails || [];
     const emailPattern = detectEmailPattern(allEmails, domain);
-
-    // Predict emails for HR contacts that don't have one
     const hrWithEmails = predictHREmails(hrContacts, emailPattern, domain);
 
-    // ── Step 5: Build LinkedIn HR search URL ───────────────────────────────
+    // ══════════════════════════════════════════════════════════════════
+    // STEP 5 — Assemble & persist
+    // ══════════════════════════════════════════════════════════════════
     const linkedinSearch = buildLinkedInSearch(c.name);
-
-    // ── Assemble other info ────────────────────────────────────────────────
     const other = [
       result.companyLinkedin ? 'Company LinkedIn: ' + result.companyLinkedin : null,
       result.twitter         ? 'Twitter/X: ' + result.twitter : null,
     ].filter(Boolean).join(' | ') || null;
 
     const scraped = !!(result.email || result.phone || result.contactPage || hrWithEmails.length || result.careersPage);
-
-    // ── Persist — merge, never wipe ────────────────────────────────────────
     const existing = cache[id] || {};
     cache[id] = {
-      email:         result.email         || existing.email         || null,
-      phone:         result.phone         || existing.phone         || null,
-      contactPage:   result.contactPage   || existing.contactPage   || null,
-      careersPage:   result.careersPage   || existing.careersPage   || null,
-      emailPattern:  emailPattern         || existing.emailPattern  || null,
-      hrContacts:    hrWithEmails.length  ? hrWithEmails : (existing.hrContacts || []),
+      email:          result.email         || existing.email         || null,
+      phone:          result.phone         || existing.phone         || null,
+      contactPage:    result.contactPage   || existing.contactPage   || null,
+      careersPage:    result.careersPage   || existing.careersPage   || null,
+      emailPattern:   emailPattern         || existing.emailPattern  || null,
+      hrContacts:     hrWithEmails.length  ? hrWithEmails : (existing.hrContacts || []),
       linkedinSearch: linkedinSearch,
-      other:         other                || existing.other         || null,
+      other:          other                || existing.other         || null,
+      usedApollo:     !!(apolloContacts?.length),
       loading: false,
       scraped: scraped || !!existing.scraped,
       fetchedAt: Date.now(),
@@ -1523,8 +1561,9 @@ async function fetchContact(id) {
     saveStore();
 
     const hrCount = hrWithEmails.length;
-    if (scraped) toast(`✓ ${c.name} — ${hrCount} HR contact${hrCount!==1?'s':''} found`, 'ok');
-    else toast(`${c.name} — nothing found (site may block scrapers)`, 'err');
+    const src = apolloContacts?.length ? '(via Apollo)' : '(website scan)';
+    if (scraped) toast(`✓ ${c.name} — ${hrCount} HR contact${hrCount!==1?'s':''} found ${src}`, 'ok');
+    else toast(`${c.name} — nothing found. Site may block scrapers.`, 'err');
 
   } catch(e) {
     const prev = cache[id] || {};
@@ -1572,6 +1611,7 @@ function renderAdminBody() {
       <button class="atab" onclick="swTab('bulk',this)">Bulk Import</button>
       <button class="atab" onclick="swTab('manage',this)">Manage (${companies.length})</button>
       <button class="atab" onclick="swTab('sync',this)">Sync</button>
+      <button class="atab" onclick="swTab('apikeys',this)" style="${getApolloKey()?'color:var(--green)':'color:var(--amber)'}">🔑 API Keys${getApolloKey()?'':' !'}</button>
     </div>
     <div class="atab-c active" id="atab-add">
       <label class="flabel">Company Name *</label>
@@ -1630,10 +1670,183 @@ function renderAdminBody() {
         <button class="fbtn prime" onclick="importPastedCSV()">⊕ Import Pasted Data</button>
       </div>
     </div>
+    <div class="atab-c" id="atab-apikeys">
+      <div class="snote" style="margin-bottom:14px">
+        <strong>Apollo.io</strong> — searches for HR &amp; Talent Acquisition contacts by company name. Returns names, roles, emails, phone numbers, and LinkedIn profiles.<br><br>
+        🆓 <strong>Free tier:</strong> 50 people exports/month · No credit card needed<br>
+        🔑 <strong>Get your key:</strong> <a href="https://app.apollo.io/#/settings/integrations/api" target="_blank" style="color:var(--blue)">app.apollo.io → Settings → Integrations → API</a>
+      </div>
+      <label class="flabel">Apollo.io API Key</label>
+      <input type="text" class="finput" id="apolloKeyInput" placeholder="your-apollo-api-key-here" value="${getApolloKey()}">
+      <div class="ferr" id="apolloKeyErr"></div>
+      <div class="fbtns" style="margin-bottom:10px">
+        <button class="fbtn prime" onclick="saveApolloKey()">💾 Save Key</button>
+        <button class="fbtn" onclick="testApolloKey()">🧪 Test Connection</button>
+        <button class="fbtn danger" onclick="clearApolloKey()">✕ Remove</button>
+      </div>
+      <div id="apolloKeyStatus" style="font-size:.76rem;font-weight:600;color:var(--green);min-height:18px;margin-bottom:16px"></div>
+      <div style="padding:11px 13px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--rs);font-size:.73rem;color:var(--ink3);line-height:1.7">
+        <strong style="color:var(--ink)">How it works:</strong><br>
+        When you click "Fetch HR Contacts" on any card, Apollo is tried <strong>first</strong>.<br>
+        If Apollo returns results → shown instantly with full details.<br>
+        If no key or Apollo returns nothing → free website scraper runs as fallback.<br><br>
+        <strong style="color:var(--ink)">What Apollo returns:</strong> Name · Job title · Work email · Phone · LinkedIn URL
+      </div>
+    </div>
 `;
     renderAlist();
     setTimeout(()=>document.getElementById('newName')?.focus(),80);
   }
+}
+
+/* ══════════════════════════════════════════════════════
+   APOLLO.IO INTEGRATION
+   API docs: https://apolloio.github.io/apollo-api-docs/
+   Free tier: 50 people exports / month
+   Get key: app.apollo.io → Settings → Integrations → API
+══════════════════════════════════════════════════════ */
+function getApolloKey() { return localStorage.getItem('cc_apollo_key') || ''; }
+function setApolloKey(k) { localStorage.setItem('cc_apollo_key', k.trim()); }
+
+async function apolloSearch(companyName, domain) {
+  const key = getApolloKey();
+  if (!key) return null;
+
+  // Apollo People Search — filter by company + HR titles
+  const hrTitles = [
+    'HR Manager','Head of HR','Chief People Officer','VP of People',
+    'Talent Acquisition','Talent Partner','Head of Talent',
+    'Recruiter','Technical Recruiter','Campus Recruiter',
+    'People Operations','People Partner','HRBP','HR Business Partner',
+    'Recruitment Manager','Staffing Manager','HR Director',
+  ];
+
+  try {
+    const resp = await fetch('https://api.apollo.io/api/v1/mixed_people/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+        'X-Api-Key': key,
+      },
+      body: JSON.stringify({
+        q_organization_name: companyName,
+        person_titles: hrTitles,
+        page: 1,
+        per_page: 10,
+      }),
+    });
+
+    if (resp.status === 401) throw new Error('Invalid Apollo API key — check Admin → 🔑 API Keys');
+    if (resp.status === 422) throw new Error('Apollo: invalid request parameters');
+    if (!resp.ok) throw new Error(`Apollo API error ${resp.status}`);
+
+    const data = await resp.json();
+    const people = data.people || [];
+
+    return people.map(p => ({
+      name:     p.name || '',
+      role:     p.title || '',
+      email:    p.email || null,
+      phone:    (p.phone_numbers?.[0]?.sanitized_number) || null,
+      linkedin: p.linkedin_url ? (p.linkedin_url.startsWith('http') ? p.linkedin_url : 'https://' + p.linkedin_url) : null,
+      source:   'Apollo',
+      predicted: false,
+    })).filter(p => p.name);
+
+  } catch(e) {
+    // If it's an auth error, re-throw so the UI can show it
+    if (e.message.includes('API key') || e.message.includes('401')) throw e;
+    console.warn('Apollo search failed:', e.message);
+    return null; // Fall through to free scraper
+  }
+}
+
+/* Apollo org search — also fetches company website + careers page */
+async function apolloOrgSearch(companyName) {
+  const key = getApolloKey();
+  if (!key) return null;
+  try {
+    const resp = await fetch('https://api.apollo.io/api/v1/mixed_companies/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'X-Api-Key': key },
+      body: JSON.stringify({ q_organization_name: companyName, page: 1, per_page: 1 }),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const org = data.organizations?.[0];
+    if (!org) return null;
+    return {
+      website:  org.website_url || null,
+      linkedin: org.linkedin_url || null,
+      phone:    org.phone || null,
+    };
+  } catch(_) { return null; }
+}
+
+function saveApolloKey() {
+  const v = document.getElementById('apolloKeyInput')?.value?.trim();
+  const err = document.getElementById('apolloKeyErr');
+  if (!v) { err.textContent = 'Paste your Apollo API key'; return; }
+  setApolloKey(v);
+  err.textContent = '';
+  document.getElementById('apolloKeyStatus').textContent = '✓ Key saved';
+  document.getElementById('apolloKeyStatus').style.color = 'var(--green)';
+  toast('Apollo API key saved', 'ok');
+}
+
+async function testApolloKey() {
+  const v = document.getElementById('apolloKeyInput')?.value?.trim() || getApolloKey();
+  if (!v) { document.getElementById('apolloKeyErr').textContent = 'No key to test'; return; }
+  const statusEl = document.getElementById('apolloKeyStatus');
+  statusEl.textContent = 'Testing…'; statusEl.style.color = 'var(--ink3)';
+  try {
+    const resp = await fetch('https://api.apollo.io/api/v1/auth/health', {
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': v }
+    });
+    if (resp.ok || resp.status === 200) {
+      statusEl.textContent = '✓ Apollo key is valid!';
+      statusEl.style.color = 'var(--green)';
+      setApolloKey(v);
+      document.getElementById('apolloKeyErr').textContent = '';
+    } else {
+      statusEl.textContent = `✗ Error ${resp.status} — check your key`;
+      statusEl.style.color = 'var(--red)';
+    }
+  } catch(e) {
+    // CORS on health check — try a real search instead
+    try {
+      const r2 = await fetch('https://api.apollo.io/api/v1/mixed_people/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'X-Api-Key': v },
+        body: JSON.stringify({ q_organization_name: 'test', page: 1, per_page: 1 }),
+      });
+      if (r2.ok) {
+        statusEl.textContent = '✓ Apollo key is valid!';
+        statusEl.style.color = 'var(--green)';
+        setApolloKey(v); document.getElementById('apolloKeyErr').textContent = '';
+      } else if (r2.status === 401) {
+        statusEl.textContent = '✗ Invalid API key';
+        statusEl.style.color = 'var(--red)';
+      } else {
+        statusEl.textContent = `Key accepted (status ${r2.status})`;
+        statusEl.style.color = 'var(--green)';
+        setApolloKey(v);
+      }
+    } catch(e2) {
+      statusEl.textContent = '✗ Network error — check connection';
+      statusEl.style.color = 'var(--red)';
+    }
+  }
+}
+
+function clearApolloKey() {
+  localStorage.removeItem('cc_apollo_key');
+  const el = document.getElementById('apolloKeyInput');
+  if (el) el.value = '';
+  document.getElementById('apolloKeyStatus').textContent = 'Key removed';
+  document.getElementById('apolloKeyStatus').style.color = 'var(--ink3)';
+  toast('Apollo key removed', 'ok');
 }
 
 function doAdminLogin() {
