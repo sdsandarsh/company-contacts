@@ -1708,11 +1708,30 @@ function renderAdminBody() {
 function getApolloKey() { return localStorage.getItem('cc_apollo_key') || ''; }
 function setApolloKey(k) { localStorage.setItem('cc_apollo_key', k.trim()); }
 
+/* apolloPost — routes Apollo API calls through a CORS proxy so they work
+   from a local HTML file. Apollo blocks direct browser-to-API calls. */
+async function apolloPost(endpoint, body, apiKey) {
+  const targetUrl = 'https://api.apollo.io/api/v1/' + endpoint;
+  // Encode the full request as a JSON payload sent to allorigins
+  // allorigins supports POST via its raw endpoint
+  const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl);
+  const resp = await fetch(proxyUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
+      'X-Api-Key': apiKey,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(12000),
+  });
+  return resp;
+}
+
 async function apolloSearch(companyName, domain) {
   const key = getApolloKey();
   if (!key) return null;
 
-  // Apollo People Search — filter by company + HR titles
   const hrTitles = [
     'HR Manager','Head of HR','Chief People Officer','VP of People',
     'Talent Acquisition','Talent Partner','Head of Talent',
@@ -1722,20 +1741,12 @@ async function apolloSearch(companyName, domain) {
   ];
 
   try {
-    const resp = await fetch('https://api.apollo.io/api/v1/mixed_people/search', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache',
-        'X-Api-Key': key,
-      },
-      body: JSON.stringify({
-        q_organization_name: companyName,
-        person_titles: hrTitles,
-        page: 1,
-        per_page: 10,
-      }),
-    });
+    const resp = await apolloPost('mixed_people/search', {
+      q_organization_name: companyName,
+      person_titles: hrTitles,
+      page: 1,
+      per_page: 10,
+    }, key);
 
     if (resp.status === 401) throw new Error('Invalid Apollo API key — check Admin → 🔑 API Keys');
     if (resp.status === 422) throw new Error('Apollo: invalid request parameters');
@@ -1743,7 +1754,6 @@ async function apolloSearch(companyName, domain) {
 
     const data = await resp.json();
     const people = data.people || [];
-
     return people.map(p => ({
       name:     p.name || '',
       role:     p.title || '',
@@ -1755,31 +1765,27 @@ async function apolloSearch(companyName, domain) {
     })).filter(p => p.name);
 
   } catch(e) {
-    // If it's an auth error, re-throw so the UI can show it
     if (e.message.includes('API key') || e.message.includes('401')) throw e;
     console.warn('Apollo search failed:', e.message);
-    return null; // Fall through to free scraper
+    return null;
   }
 }
 
-/* Apollo org search — also fetches company website + careers page */
 async function apolloOrgSearch(companyName) {
   const key = getApolloKey();
   if (!key) return null;
   try {
-    const resp = await fetch('https://api.apollo.io/api/v1/mixed_companies/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'X-Api-Key': key },
-      body: JSON.stringify({ q_organization_name: companyName, page: 1, per_page: 1 }),
-    });
+    const resp = await apolloPost('mixed_companies/search', {
+      q_organization_name: companyName, page: 1, per_page: 1,
+    }, key);
     if (!resp.ok) return null;
     const data = await resp.json();
     const org = data.organizations?.[0];
     if (!org) return null;
     return {
-      website:  org.website_url || null,
+      website:  org.website_url  || null,
       linkedin: org.linkedin_url || null,
-      phone:    org.phone || null,
+      phone:    org.phone        || null,
     };
   } catch(_) { return null; }
 }
@@ -1799,44 +1805,30 @@ async function testApolloKey() {
   const v = document.getElementById('apolloKeyInput')?.value?.trim() || getApolloKey();
   if (!v) { document.getElementById('apolloKeyErr').textContent = 'No key to test'; return; }
   const statusEl = document.getElementById('apolloKeyStatus');
-  statusEl.textContent = 'Testing…'; statusEl.style.color = 'var(--ink3)';
+  statusEl.textContent = 'Testing connection via proxy…'; statusEl.style.color = 'var(--ink3)';
   try {
-    const resp = await fetch('https://api.apollo.io/api/v1/auth/health', {
-      headers: { 'Content-Type': 'application/json', 'X-Api-Key': v }
-    });
-    if (resp.ok || resp.status === 200) {
-      statusEl.textContent = '✓ Apollo key is valid!';
+    const resp = await apolloPost('mixed_people/search', {
+      q_organization_name: 'Infosys', page: 1, per_page: 1,
+    }, v);
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const found = data.people?.length || 0;
+      statusEl.textContent = `✓ Apollo key works! (found ${found} result${found!==1?'s':''} for test search)`;
       statusEl.style.color = 'var(--green)';
       setApolloKey(v);
       document.getElementById('apolloKeyErr').textContent = '';
+    } else if (resp.status === 401) {
+      statusEl.textContent = '✗ Invalid API key — double-check and try again';
+      statusEl.style.color = 'var(--red)';
     } else {
-      statusEl.textContent = `✗ Error ${resp.status} — check your key`;
+      statusEl.textContent = `✗ Apollo returned status ${resp.status}`;
       statusEl.style.color = 'var(--red)';
     }
   } catch(e) {
-    // CORS on health check — try a real search instead
-    try {
-      const r2 = await fetch('https://api.apollo.io/api/v1/mixed_people/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'X-Api-Key': v },
-        body: JSON.stringify({ q_organization_name: 'test', page: 1, per_page: 1 }),
-      });
-      if (r2.ok) {
-        statusEl.textContent = '✓ Apollo key is valid!';
-        statusEl.style.color = 'var(--green)';
-        setApolloKey(v); document.getElementById('apolloKeyErr').textContent = '';
-      } else if (r2.status === 401) {
-        statusEl.textContent = '✗ Invalid API key';
-        statusEl.style.color = 'var(--red)';
-      } else {
-        statusEl.textContent = `Key accepted (status ${r2.status})`;
-        statusEl.style.color = 'var(--green)';
-        setApolloKey(v);
-      }
-    } catch(e2) {
-      statusEl.textContent = '✗ Network error — check connection';
-      statusEl.style.color = 'var(--red)';
-    }
+    statusEl.textContent = '✗ Proxy unreachable — try again in a moment';
+    statusEl.style.color = 'var(--red)';
+    console.warn('Apollo test error:', e.message);
   }
 }
 
