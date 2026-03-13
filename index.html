@@ -465,7 +465,21 @@ header{
 .empty{grid-column:1/-1;text-align:center;padding:64px 20px;}
 .empty h3{font-family:'Sora',sans-serif;font-size:1.6rem;font-weight:700;color:var(--ink3);margin-bottom:8px;}
 .empty p{font-size:.82rem;color:var(--ink4);}
-::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px;}
+/* sync error banner */
+#syncBanner { transition: background .3s; }
+[data-theme="dark"] #syncBanner {
+  background: #1c1a08 !important;
+  border-color: #854d0e !important;
+  color: #fef08a !important;
+}
+[data-theme="dark"] #syncBanner strong { color: #fef9c3; }
+[data-theme="dark"] #syncBanner span { color: #fde68a !important; }
+[data-theme="dark"] #syncBanner button,
+[data-theme="dark"] #syncBanner a {
+  border-color: #854d0e !important;
+  color: #fef08a !important;
+  background: rgba(255,255,255,.05) !important;
+}
 @media(max-width:700px){
   .hero,.toolbar,.content{padding-left:20px;padding-right:20px;}
   header{padding:0 16px;}
@@ -515,6 +529,7 @@ header{
   <div class="h-right">
     <div class="hpill"><div class="dot"></div><span id="cntLbl">0 companies</span></div>
     <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle dark mode"></button>
+    <button class="hbtn" id="homeBtn" onclick="goHome()" title="Back to home">⌂ Home</button>
     <button class="hbtn" id="adminBtn" onclick="openAdmin()">⚙ Admin</button>
   </div>
 </header>
@@ -579,7 +594,13 @@ header{
 const LOGIN_PW  = '2007';
 const ADMIN_PW  = '1995';
 const SHEET_ID  = '1tRqt75OIstbbj-bsLUVC8kwVBburmbYMWuTiN7t7wys';
-const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
+// Multiple URL formats tried in order — gviz works for "shared" sheets,
+// export works for "published to web" sheets.
+const SHEET_URLS = [
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=0`,
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`,
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/pub?gid=0&single=true&output=csv`,
+];
 const STORE_KEY = 'cc_v6';
 const MODEL     = 'claude-sonnet-4-20250514';
 
@@ -652,28 +673,112 @@ function saveStore() {
 }
 
 /* ── SHEET SYNC ── */
-async function syncSheet() {
-  try {
-    const r = await fetch(SHEET_URL); if (!r.ok) throw new Error('Sheet not public');
-    const csv = await r.text();
-    const rows = parseCSV(csv);
-    rows.forEach(row => {
-      const ex = companies.find(c => c.name.toLowerCase() === row.name.toLowerCase());
-      if (!ex) companies.push({ id: uid(), name: row.name, url: norm(row.url), offering: row.offering, addedAt: Date.now() });
-      else {
-        if (row.url && !ex.url) ex.url = norm(row.url);
-        if (row.offering && !ex.offering) ex.offering = row.offering;
+async function syncSheet(showBanner=true) {
+  hideSyncBanner();
+  let csv = null;
+  let lastErr = '';
+
+  for (const url of SHEET_URLS) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (!r.ok) { lastErr = `HTTP ${r.status}`; continue; }
+      const text = await r.text();
+      // Sanity check: Google auth redirect returns HTML, not CSV
+      if (text.trim().startsWith('<') || text.length < 10) {
+        lastErr = 'Got HTML instead of CSV — sheet not public';
+        continue;
       }
-      const c = companies.find(c => c.name.toLowerCase() === row.name.toLowerCase());
-      if (c && (row.email||row.phone||row.other) && !cache[c.id]?.scraped) {
-        cache[c.id] = { email:row.email||null, phone:row.phone||null, other:row.other||null, scraped:!!(row.email||row.phone), fromSheet:true };
-      }
-    });
-    saveStore(); renderAll(); buildCarouselBg(companies);
-    toast('Synced from Google Sheets', 'ok');
-  } catch(e) {
-    if (companies.length === 0) toast('Sheet not public — add companies via Admin', 'err');
+      csv = text;
+      break;
+    } catch(e) {
+      lastErr = e.message || 'Network error';
+    }
   }
+
+  if (!csv) {
+    if (showBanner) showSyncBanner(lastErr);
+    return;
+  }
+
+  const rows = parseCSV(csv);
+  if (rows.length === 0) { toast('Sheet loaded but no data rows found — check column headers','err'); return; }
+
+  rows.forEach(row => {
+    const ex = companies.find(c => c.name.toLowerCase() === row.name.toLowerCase());
+    if (!ex) companies.push({ id: uid(), name: row.name, url: norm(row.url), offering: row.offering, addedAt: Date.now() });
+    else {
+      if (row.url && !ex.url) ex.url = norm(row.url);
+      if (row.offering && !ex.offering) ex.offering = row.offering;
+    }
+    const c = companies.find(c => c.name.toLowerCase() === row.name.toLowerCase());
+    if (c && (row.email||row.phone||row.other) && !cache[c.id]?.scraped) {
+      cache[c.id] = { email:row.email||null, phone:row.phone||null, other:row.other||null, scraped:!!(row.email||row.phone), fromSheet:true };
+    }
+  });
+  saveStore(); renderAll(); buildCarouselBg(companies);
+  toast(`✓ Synced ${rows.length} companies from Google Sheets`, 'ok');
+}
+
+/* ── SYNC BANNER (shown when fetch fails) ── */
+function showSyncBanner(errDetail) {
+  let b = document.getElementById('syncBanner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'syncBanner';
+    b.style.cssText = `
+      position:sticky;top:62px;z-index:90;
+      background:#fefce8;border-bottom:2px solid #fde047;
+      padding:14px 40px;display:flex;align-items:flex-start;gap:14px;
+      font-size:.82rem;font-weight:500;color:#713f12;
+    `;
+    // Insert after header
+    document.querySelector('header').after(b);
+  }
+  b.innerHTML = `
+    <span style="font-size:1.2rem;flex-shrink:0">⚠️</span>
+    <div style="flex:1">
+      <strong style="display:block;margin-bottom:4px">Could not load Google Sheet automatically</strong>
+      <span style="color:#92400e;font-size:.77rem">Reason: ${errDetail || 'Network or permissions error'}</span>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="openAdminToSync()" 
+          style="padding:6px 14px;border-radius:8px;border:1.5px solid #92400e;background:#fff;color:#92400e;font-size:.75rem;font-weight:700;cursor:pointer">
+          📋 Paste CSV manually
+        </button>
+        <a href="https://docs.google.com/spreadsheets/d/${SHEET_ID}" target="_blank"
+          style="padding:6px 14px;border-radius:8px;border:1.5px solid #92400e;background:transparent;color:#92400e;font-size:.75rem;font-weight:700;text-decoration:none">
+          🔗 Open Sheet → File → Share → Publish to web → CSV
+        </a>
+        <button onclick="syncSheet(true)" 
+          style="padding:6px 14px;border-radius:8px;border:1.5px solid #92400e;background:transparent;color:#92400e;font-size:.75rem;font-weight:700;cursor:pointer">
+          ↻ Retry
+        </button>
+      </div>
+    </div>
+    <button onclick="hideSyncBanner()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:#92400e;flex-shrink:0">✕</button>
+  `;
+}
+function hideSyncBanner() {
+  const b = document.getElementById('syncBanner');
+  if (b) b.remove();
+}
+
+/* ── PASTE CSV (manual import) ── */
+function importPastedCSV() {
+  const raw = document.getElementById('pasteCSVInput')?.value?.trim();
+  if (!raw) { document.getElementById('pasteCsvErr').textContent = 'Please paste your CSV data first'; return; }
+  const rows = parseCSV(raw);
+  if (!rows.length) { document.getElementById('pasteCsvErr').textContent = 'No valid rows found — check the format'; return; }
+  rows.forEach(row => {
+    const ex = companies.find(c => c.name.toLowerCase() === row.name.toLowerCase());
+    if (!ex) companies.push({ id: uid(), name: row.name, url: norm(row.url), offering: row.offering, addedAt: Date.now() });
+    else {
+      if (row.url && !ex.url) ex.url = norm(row.url);
+      if (row.offering && !ex.offering) ex.offering = row.offering;
+    }
+  });
+  saveStore(); renderAll(); buildCarouselBg(companies); hideSyncBanner();
+  toast(`✓ Imported ${rows.length} companies from pasted CSV`, 'ok');
+  closeAdmin();
 }
 
 function parseCSV(csv) {
@@ -856,6 +961,15 @@ For "other", include LinkedIn company page URL or Twitter/X handle if found. Use
 
 /* ── ADMIN ── */
 function openAdmin() { renderAdminBody(); document.getElementById('aoverlay').classList.add('open'); }
+function openAdminToSync() {
+  renderAdminBody();
+  document.getElementById('aoverlay').classList.add('open');
+  // Switch to sync tab after render
+  setTimeout(() => {
+    const syncTab = Array.from(document.querySelectorAll('.atab')).find(t => t.textContent.includes('Sync'));
+    if (syncTab) swTab('sync', syncTab);
+  }, 50);
+}
 function closeAdmin() { document.getElementById('aoverlay').classList.remove('open'); }
 function closeAdminOut(e) { if(e.target===document.getElementById('aoverlay')) closeAdmin(); }
 
@@ -875,7 +989,7 @@ function renderAdminBody() {
       <button class="atab active" onclick="swTab('add',this)">Add One</button>
       <button class="atab" onclick="swTab('bulk',this)">Bulk Import</button>
       <button class="atab" onclick="swTab('manage',this)">Manage (${companies.length})</button>
-      <button class="atab" onclick="swTab('sync',this)">Sync</button>
+      <button class="atab" onclick="swTab('sync',this)">Sync / Import</button>
     </div>
     <div class="atab-c active" id="atab-add">
       <label class="flabel">Company Name *</label>
@@ -914,14 +1028,23 @@ function renderAdminBody() {
     </div>
     <div class="atab-c" id="atab-sync">
       <div class="snote">
-        To auto-sync from Google Sheets, publish your sheet:<br>
-        <strong>File → Share → Publish to web → Select "Comma-separated values (.csv)" → Publish</strong><br><br>
-        The app reads <strong>Column B</strong> (Company Name) and <strong>Column C</strong> (Primary Offerings) automatically.<br><br>
-        Sheet ID: <code style="color:var(--blue);font-size:.72rem">${SHEET_ID}</code>
+        <strong>Option A — Auto-sync (recommended):</strong><br>
+        In your Google Sheet: <strong>File → Share → Publish to web → Comma-separated values (.csv) → Publish</strong><br>
+        Then click "↻ Auto-sync Now" below.<br><br>
+        <strong>Option B — Paste CSV manually:</strong><br>
+        Open your sheet → select all (Ctrl+A) → copy → paste below.<br><br>
+        App reads <strong>Column B</strong> (Company) and <strong>Column C</strong> (Primary Offerings).<br>
+        Sheet ID: <code style="color:var(--blue);font-size:.7rem">${SHEET_ID}</code>
       </div>
-      <div class="fbtns">
-        <button class="fbtn prime" onclick="syncSheet()">↻ Sync Sheet Now</button>
+      <div class="fbtns" style="margin-bottom:16px">
+        <button class="fbtn prime" onclick="syncSheet(true)">↻ Auto-sync Now</button>
         <button class="fbtn" onclick="fetchAll()">⟳ Fetch All Contacts</button>
+      </div>
+      <label class="flabel">— or — Paste CSV / Sheet Data Here</label>
+      <textarea class="finput ftextarea" id="pasteCSVInput" placeholder="Paste raw CSV or tab-separated data from your Google Sheet here…&#10;&#10;Example:&#10;S.No,Company Name,Primary Offerings&#10;1,Infosys,IT consulting&#10;2,Wipro,Cloud &amp; BPO"></textarea>
+      <div class="ferr" id="pasteCsvErr"></div>
+      <div class="fbtns">
+        <button class="fbtn prime" onclick="importPastedCSV()">⊕ Import Pasted Data</button>
       </div>
     </div>`;
     renderAlist();
@@ -973,29 +1096,47 @@ function addCo(doFetch=true) {
 function doBulkImport(doFetch=true) {
   const raw = document.getElementById('bulkInput')?.value?.trim();
   if (!raw) { document.getElementById('bulkErr').textContent='Please paste at least one company'; return; }
+
   const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
-  let added=0, skipped=0;
+  let added=0, dupInList=0, dupExisting=0;
   const newOnes=[];
+  const seenInPaste = new Set(); // catches duplicates within the pasted list itself
+
   lines.forEach(line => {
-    const parts = line.split(',').map(p=>p.trim());
+    const parts    = line.split(',').map(p=>p.trim());
     const name     = parts[0];
     const urlRaw   = parts[1] || '';
     const offering = parts[2] || '';
-    if (!name) { skipped++; return; }
-    if (companies.find(c=>c.name.toLowerCase()===name.toLowerCase())) { skipped++; return; }
-    const c={id:uid(),name,url:norm(urlRaw),offering,addedAt:Date.now()};
+    if (!name) return;
+
+    const key = name.toLowerCase();
+
+    // Duplicate within the pasted list
+    if (seenInPaste.has(key)) { dupInList++; return; }
+    seenInPaste.add(key);
+
+    // Already saved
+    if (companies.find(c => c.name.toLowerCase() === key)) { dupExisting++; return; }
+
+    const c = { id: uid(), name, url: norm(urlRaw), offering, addedAt: Date.now() };
     companies.push(c); newOnes.push(c); added++;
   });
+
   saveStore(); renderAll(); buildCarouselBg(companies);
-  document.getElementById('bulkErr').textContent='';
-  toast(`${added} companies added${skipped?' ('+skipped+' skipped)':''}`, 'ok');
+  document.getElementById('bulkErr').textContent = '';
+
+  const summary = [`${added} added`];
+  if (dupInList)   summary.push(`${dupInList} duplicate${dupInList>1?'s':''} in list removed`);
+  if (dupExisting) summary.push(`${dupExisting} already existed`);
+  toast(summary.join(' · '), 'ok');
+
   closeAdmin();
-  if (doFetch) {
-    (async()=>{
+  if (doFetch && newOnes.length) {
+    (async () => {
       for (const c of newOnes) {
-        if (c.url||c.name) { await fetchContact(c.id); await new Promise(r=>setTimeout(r,1600)); }
+        if (c.url || c.name) { await fetchContact(c.id); await new Promise(r => setTimeout(r, 1600)); }
       }
-      toast('All new contacts fetched','ok');
+      toast('All new contacts fetched', 'ok');
     })();
   }
 }
@@ -1022,6 +1163,12 @@ async function fetchAll() {
 }
 
 /* ── HELPERS ── */
+function goHome() {
+  // Clear search and scroll to top
+  const si = document.getElementById('searchInput');
+  if (si) { si.value = ''; filterGrid(); }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 function uid()  { return Math.random().toString(36).slice(2,10); }
 function norm(u){ if(!u)return''; u=u.trim(); if(!u.startsWith('http'))u='https://'+u; return u.replace(/\/$/,''); }
 function dom(u) { try{return new URL(u).hostname.replace('www.','');}catch(e){return u;} }
