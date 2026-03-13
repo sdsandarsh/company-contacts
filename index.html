@@ -581,6 +581,7 @@ header{
     <span class="si">⌕</span>
     <input type="text" id="searchInput" placeholder="Search by name, domain, or offerings…" oninput="filterGrid()">
   </div>
+  <button class="hbtn" id="bulkFetchBtn" onclick="bulkFetchAll()" title="Fetch contacts for all companies at once">⚡ Bulk Fetch</button>
 </div>
 
 <!-- ═══════ GRID ═══════ -->
@@ -1396,11 +1397,89 @@ function clearAll() {
 }
 
 async function fetchAll() {
-  const pending=companies.filter(c=>(c.url||c.name)&&!cache[c.id]?.scraped);
-  if (!pending.length) { toast('All companies already have contact data','ok'); return; }
-  closeAdmin(); toast(`Fetching ${pending.length} companies…`,'ok');
-  for (const c of pending) { await fetchContact(c.id); await new Promise(r=>setTimeout(r,1600)); }
-  toast('All contacts fetched','ok');
+  const pending = companies.filter(c => (c.url||c.name) && !cache[c.id]?.scraped);
+  if (!pending.length) { toast('All companies already have contact data', 'ok'); return; }
+  closeAdmin();
+  await bulkFetchRun(pending);
+}
+
+/* bulkFetchAll — triggered from the toolbar button, fetches ALL companies
+   in parallel batches of 4. Shows a live progress bar. */
+async function bulkFetchAll() {
+  if (companies.length === 0) { toast('No companies to fetch', 'err'); return; }
+
+  const all = companies.filter(c => c.url || c.name);
+  if (!all.length) { toast('No companies have a name or URL', 'err'); return; }
+
+  const confirmed = all.length > 10
+    ? confirm(`Fetch contacts for all ${all.length} companies? This runs ${all.length} web scrapes in parallel.`)
+    : true;
+  if (!confirmed) return;
+
+  await bulkFetchRun(all);
+}
+
+async function bulkFetchRun(list) {
+  const BATCH = 4; // run 4 at a time — more than this risks proxy rate-limits
+  let done = 0;
+  const total = list.length;
+
+  // Show progress bar
+  showBulkProgress(0, total);
+  toast(`⚡ Bulk fetching ${total} companies…`, 'ok');
+
+  for (let i = 0; i < list.length; i += BATCH) {
+    const batch = list.slice(i, i + BATCH);
+    // Fetch this batch fully in parallel
+    await Promise.allSettled(batch.map(c => fetchContact(c.id)));
+    done += batch.length;
+    updateBulkProgress(done, total);
+  }
+
+  hideBulkProgress();
+  const found = list.filter(c => cache[c.id]?.scraped).length;
+  toast(`⚡ Done — ${found}/${total} companies have contact data`, 'ok');
+}
+
+/* ── Bulk progress bar UI ── */
+function showBulkProgress(done, total) {
+  let bar = document.getElementById('bulkProgressBar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'bulkProgressBar';
+    bar.style.cssText = `
+      position:sticky;top:62px;z-index:95;
+      background:var(--white);border-bottom:2px solid var(--border);
+      padding:10px 40px;display:flex;align-items:center;gap:14px;
+      font-family:'Inter',sans-serif;font-size:.78rem;font-weight:600;
+      color:var(--ink2);transition:background .3s;
+    `;
+    document.querySelector('header').after(bar);
+  }
+  updateBulkProgress(done, total);
+}
+
+function updateBulkProgress(done, total) {
+  const bar = document.getElementById('bulkProgressBar');
+  if (!bar) return;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const found = companies.filter(c => cache[c.id]?.scraped).length;
+  bar.innerHTML = `
+    <span style="white-space:nowrap">⚡ Bulk Fetch</span>
+    <div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;">
+      <div style="height:100%;width:${pct}%;background:var(--blue);border-radius:3px;transition:width .4s ease"></div>
+    </div>
+    <span style="white-space:nowrap;color:var(--ink3)">${done}/${total} · ${found} found</span>
+    <button onclick="hideBulkProgress()" style="background:none;border:none;cursor:pointer;color:var(--ink4);font-size:1rem;padding:0;line-height:1">✕</button>
+  `;
+}
+
+function hideBulkProgress() {
+  const bar = document.getElementById('bulkProgressBar');
+  if (bar) bar.remove();
+  // Reset bulk fetch button
+  const btn = document.getElementById('bulkFetchBtn');
+  if (btn) { btn.textContent = '⚡ Bulk Fetch'; btn.disabled = false; btn.style.opacity = ''; }
 }
 
 /* ── HELPERS ── */
