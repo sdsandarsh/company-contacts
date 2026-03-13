@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Company Contacts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════
+   TOKENS — light & dark
+══════════════════════════════════════════ */
+:root {
+  --bg:        #f7f5f0;
+  --bg2:       #edeae2;
+  --bg3:       #e4e0d6;
+  --surface:   #ffffff;
+  --surface2:  #f2f0eb;
+  --border:    rgba(0,0,0,0.09);
+  --border2:   rgba(0,0,0,0.16);
+  --ink:       #1a1814;
+  --ink2:      #3d3a34;
+  --ink3:      #7a7570;
+  --ink4:      #b0aca5;
+  --accent:    #d4410c;
+  --accent2:   #f05a28;
+  --accentBg:  rgba(212,65,12,0.07);
+  --accentBdr: rgba(212,65,12,0.22);
+  --strip:     #1a1814;
+  --stripText: #f7f5f0;
+  --shadow:    0 2px 20px rgba(0,0,0,0.08);
+  --shadow2:   0 8px 40px rgba(0,0,0,0.12);
+  --r:         14px;
+  --rs:        9px;
+  --ring-w:    52px; /* width of the perimeter ring */
+}
+[data-theme="dark"] {
+  --bg:        #111010;
+  --bg2:       #191817;
+  --bg3:       #222020;
+  --surface:   #1e1c1b;
+  --surface2:  #252321;
+  --border:    rgba(255,255,255,0.07);
+  --border2:   rgba(255,255,255,0.14);
+  --ink:       #f0ede6;
+  --ink2:      #c8c4bc;
+  --ink3:      #7a7670;
+  --ink4:      #4a4740;
+  --accent:    #f05a28;
+  --accent2:   #ff7a48;
+  --accentBg:  rgba(240,90,40,0.10);
+  --accentBdr: rgba(240,90,40,0.28);
+  --strip:     #f0ede6;
+  --stripText: #111010;
+  --shadow:    0 2px 20px rgba(0,0,0,0.4);
+  --shadow2:   0 8px 40px rgba(0,0,0,0.5);
+}
+
+/* ══════════════════════════════════════════
+   RESET
+══════════════════════════════════════════ */
+*{margin:0;padding:0;box-sizing:border-box;}
+html{height:100%;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'Manrope',sans-serif;
+  min-height:100vh;
+  transition:background .35s,color .35s;
+  overflow-x:hidden;
+}
+
+/* ══════════════════════════════════════════
+   LOCK SCREEN
+══════════════════════════════════════════ */
+#lockScreen{
+  position:fixed;inset:0;z-index:2000;
+  background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  transition:background .35s;
+}
+.lock-card{
+  width:min(400px,90vw);
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:20px;
+  overflow:hidden;
+  box-shadow:var(--shadow2);
+}
+.lock-band{
+  background:var(--ink);
+  padding:28px 32px;
+  display:flex;align-items:center;gap:14px;
+}
+.lock-band .lb-icon{
+  width:40px;height:40px;border-radius:50%;
+  background:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.1rem;flex-shrink:0;
+}
+.lock-band h1{
+  font-family:'Playfair Display',serif;
+  font-size:1.35rem;font-weight:700;
+  color:#f7f5f0;letter-spacing:.01em;
+}
+.lock-band p{
+  font-family:'DM Mono',monospace;
+  font-size:.65rem;color:rgba(247,245,240,.5);
+  letter-spacing:.1em;margin-top:3px;
+}
+.lock-form{padding:28px 32px;}
+.lf-label{
+  display:block;font-family:'DM Mono',monospace;
+  font-size:.64rem;color:var(--ink3);
+  letter-spacing:.12em;text-transform:uppercase;margin-bottom:7px;
+}
+.lf-input{
+  width:100%;padding:12px 14px;
+  border-radius:var(--rs);
+  border:1px solid var(--border2);
+  background:var(--bg2);
+  color:var(--ink);
+  font-family:'DM Mono',monospace;font-size:.9rem;
+  outline:none;transition:all .2s;margin-bottom:8px;
+}
+.lf-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accentBg);}
+.lf-input::placeholder{color:var(--ink4);}
+.lf-err{
+  font-family:'DM Mono',monospace;font-size:.7rem;
+  color:var(--accent);min-height:18px;margin-bottom:10px;
+}
+.lf-btn{
+  width:100%;padding:13px;
+  border-radius:var(--rs);border:none;
+  background:var(--ink);color:var(--bg);
+  font-family:'Manrope',sans-serif;font-size:.95rem;font-weight:700;
+  cursor:pointer;transition:all .2s;letter-spacing:.02em;
+}
+.lf-btn:hover{background:var(--accent);box-shadow:0 4px 20px rgba(212,65,12,.3);}
+
+/* ══════════════════════════════════════════
+   PERIMETER CAROUSEL RING
+   4 strips: top, bottom, left, right
+══════════════════════════════════════════ */
+.ring{
+  position:fixed;
+  z-index:50;
+  overflow:hidden;
+  pointer-events:none;
+}
+.ring * { pointer-events:auto; }
+
+/* shared strip bg */
+.ring-inner{
+  background:var(--strip);
+  display:flex;
+  align-items:center;
+  width:100%;height:100%;
+  overflow:hidden;
+}
+
+/* TOP */
+#ringTop{
+  top:0;left:0;right:0;
+  height:var(--ring-w);
+}
+#ringTop .ring-inner{
+  mask-image:linear-gradient(90deg,transparent,black 6%,black 94%,transparent);
+}
+
+/* BOTTOM */
+#ringBot{
+  bottom:0;left:0;right:0;
+  height:var(--ring-w);
+}
+#ringBot .ring-inner{
+  mask-image:linear-gradient(90deg,transparent,black 6%,black 94%,transparent);
+}
+
+/* LEFT */
+#ringLeft{
+  top:var(--ring-w);left:0;
+  width:var(--ring-w);
+  bottom:var(--ring-w);
+}
+#ringLeft .ring-inner{
+  flex-direction:column;
+  mask-image:linear-gradient(180deg,transparent,black 6%,black 94%,transparent);
+}
+
+/* RIGHT */
+#ringRight{
+  top:var(--ring-w);right:0;
+  width:var(--ring-w);
+  bottom:var(--ring-w);
+}
+#ringRight .ring-inner{
+  flex-direction:column;
+  mask-image:linear-gradient(180deg,transparent,black 6%,black 94%,transparent);
+}
+
+/* corner squares */
+.corner{
+  position:fixed;z-index:51;
+  width:var(--ring-w);height:var(--ring-w);
+  background:var(--strip);
+  display:flex;align-items:center;justify-content:center;
+  transition:background .35s;
+}
+#cTL{top:0;left:0;}
+#cTR{top:0;right:0;}
+#cBL{bottom:0;left:0;}
+#cBR{bottom:0;right:0;}
+.corner-dot{
+  width:10px;height:10px;border-radius:50%;
+  background:var(--stripText);opacity:.25;
+}
+/* accent corner for brand identity */
+#cTL{background:var(--accent);}
+#cTL .corner-dot{background:#fff;opacity:.5;}
+
+/* ── STRIP TRACKS ── */
+.strip-track{
+  display:flex;gap:0;
+  width:max-content;
+  flex-shrink:0;
+}
+/* horizontal */
+.strip-track.h { flex-direction:row; }
+/* vertical */
+.strip-track.v { flex-direction:column; }
+
+/* animations */
+.strip-track.scroll-left { animation:sLeft var(--dur,28s) linear infinite; }
+.strip-track.scroll-right{ animation:sRight var(--dur,28s) linear infinite; }
+.strip-track.scroll-up   { animation:sUp var(--dur,28s) linear infinite; }
+.strip-track.scroll-down { animation:sDown var(--dur,28s) linear infinite; }
+.ring-inner:hover .strip-track { animation-play-state:paused; }
+
+@keyframes sLeft  { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+@keyframes sRight { from{transform:translateX(-50%)} to{transform:translateX(0)} }
+@keyframes sUp    { from{transform:translateY(0)} to{transform:translateY(-50%)} }
+@keyframes sDown  { from{transform:translateY(-50%)} to{transform:translateY(0)} }
+
+/* logo chip */
+.lchip{
+  display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:4px;
+  width:var(--ring-w);
+  height:var(--ring-w);
+  cursor:pointer;
+  transition:background .18s;
+  flex-shrink:0;
+  border-right:1px solid rgba(255,255,255,0.08);
+  position:relative;
+}
+.lchip:hover { background:rgba(255,255,255,0.1); }
+/* vertical chips */
+.lchip.vert {
+  width:var(--ring-w);
+  height:var(--ring-w);
+  border-right:none;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+}
+.lchip img{
+  width:26px;height:26px;
+  border-radius:6px;
+  object-fit:contain;
+  display:block;
+}
+.lchip .ltip{
+  position:absolute;
+  background:var(--ink);
+  color:var(--bg);
+  font-family:'DM Mono',monospace;font-size:.6rem;
+  letter-spacing:.06em;
+  padding:4px 8px;border-radius:5px;
+  white-space:nowrap;
+  opacity:0;pointer-events:none;
+  transition:opacity .18s;
+  z-index:10;
+}
+/* top strip tooltip below chip */
+#ringTop .ltip { top:calc(100% + 4px); left:50%;transform:translateX(-50%); }
+#ringBot .ltip { bottom:calc(100% + 4px); left:50%;transform:translateX(-50%); }
+#ringLeft .ltip { left:calc(100% + 4px); top:50%;transform:translateY(-50%); }
+#ringRight .ltip { right:calc(100% + 4px); top:50%;transform:translateY(-50%); }
+.lchip:hover .ltip { opacity:1; }
+
+/* ══════════════════════════════════════════
+   MAIN LAYOUT (inside the ring)
+══════════════════════════════════════════ */
+.page{
+  /* inset from all 4 ring strips */
+  margin:var(--ring-w);
+  min-height:calc(100vh - 2 * var(--ring-w));
+  display:flex;flex-direction:column;
+}
+
+/* ══════════════════════════════════════════
+   HEADER BAR
+══════════════════════════════════════════ */
+header{
+  position:sticky;top:var(--ring-w);z-index:40;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:0 32px;height:60px;
+  display:flex;align-items:center;justify-content:space-between;
+  box-shadow:var(--shadow);
+  transition:background .35s,border-color .35s;
+}
+.logo-wrap{display:flex;align-items:baseline;gap:8px;}
+.logo-name{
+  font-family:'Playfair Display',serif;
+  font-size:1.3rem;font-weight:700;
+  color:var(--ink);letter-spacing:.01em;
+}
+.logo-name em{color:var(--accent);font-style:italic;}
+.logo-tag{
+  font-family:'DM Mono',monospace;font-size:.62rem;
+  color:var(--ink3);letter-spacing:.12em;text-transform:uppercase;
+}
+.header-right{display:flex;align-items:center;gap:10px;}
+.pill-count{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 12px;border-radius:20px;
+  border:1px solid var(--border2);
+  background:var(--bg2);
+  font-family:'DM Mono',monospace;font-size:.68rem;
+  color:var(--ink3);letter-spacing:.05em;
+}
+.pill-count .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* DARK MODE TOGGLE */
+.toggle-btn{
+  width:44px;height:24px;border-radius:12px;
+  border:1.5px solid var(--border2);
+  background:var(--bg3);
+  cursor:pointer;position:relative;
+  transition:all .3s;flex-shrink:0;
+}
+.toggle-btn::after{
+  content:'';
+  position:absolute;top:3px;left:3px;
+  width:15px;height:15px;border-radius:50%;
+  background:var(--ink3);
+  transition:transform .3s, background .3s;
+}
+[data-theme="dark"] .toggle-btn{background:var(--accent);}
+[data-theme="dark"] .toggle-btn::after{transform:translateX(20px);background:#fff;}
+
+.hbtn{
+  padding:7px 14px;border-radius:var(--rs);
+  border:1px solid var(--border2);
+  background:var(--bg2);
+  color:var(--ink2);
+  font-family:'DM Mono',monospace;font-size:.7rem;
+  letter-spacing:.06em;text-transform:uppercase;
+  cursor:pointer;transition:all .2s;
+}
+.hbtn:hover{border-color:var(--accent);color:var(--accent);background:var(--accentBg);}
+.hbtn.admin-on{border-color:var(--accent);color:var(--accent);background:var(--accentBg);}
+
+/* ══════════════════════════════════════════
+   HERO
+══════════════════════════════════════════ */
+.hero{
+  padding:60px 40px 48px;
+  display:grid;grid-template-columns:1fr auto;
+  align-items:center;gap:40px;
+  border-bottom:1px solid var(--border);
+}
+.hero-text h2{
+  font-family:'Playfair Display',serif;
+  font-size:clamp(2.8rem,6vw,5rem);
+  font-weight:900;line-height:1.05;
+  letter-spacing:-.02em;color:var(--ink);
+}
+.hero-text h2 em{color:var(--accent);font-style:italic;}
+.hero-text p{
+  margin-top:16px;
+  font-family:'DM Mono',monospace;font-size:.78rem;
+  color:var(--ink3);letter-spacing:.08em;line-height:1.7;
+  max-width:460px;
+}
+.hero-stats{
+  display:flex;flex-direction:column;gap:0;
+  border:1px solid var(--border2);
+  border-radius:var(--r);overflow:hidden;
+  min-width:160px;
+  box-shadow:var(--shadow);
+}
+.hstat{
+  padding:16px 20px;border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+.hstat:last-child{border-bottom:none;}
+.hstat-n{
+  font-family:'Playfair Display',serif;
+  font-size:2rem;font-weight:700;color:var(--accent);
+  line-height:1;
+}
+.hstat-l{
+  font-family:'DM Mono',monospace;font-size:.62rem;
+  color:var(--ink3);letter-spacing:.1em;text-transform:uppercase;
+  margin-top:4px;
+}
+
+/* ══════════════════════════════════════════
+   TOOLBAR + GRID
+══════════════════════════════════════════ */
+.toolbar{
+  display:flex;align-items:center;gap:14px;
+  padding:24px 40px 20px;
+  border-bottom:1px solid var(--border);
+}
+.section-label{
+  font-family:'Playfair Display',serif;
+  font-size:1.1rem;font-weight:700;
+  color:var(--ink);white-space:nowrap;
+}
+.searchbox{
+  position:relative;flex:1;max-width:360px;
+}
+.searchbox input{
+  width:100%;padding:9px 14px 9px 34px;
+  border-radius:var(--rs);
+  border:1px solid var(--border2);
+  background:var(--surface);
+  color:var(--ink);
+  font-family:'DM Mono',monospace;font-size:.8rem;
+  outline:none;transition:all .2s;
+}
+.searchbox input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accentBg);}
+.searchbox input::placeholder{color:var(--ink4);}
+.searchbox .si{
+  position:absolute;left:11px;top:50%;transform:translateY(-50%);
+  color:var(--ink4);font-size:.85rem;pointer-events:none;
+}
+.content{padding:28px 40px 60px;}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:16px;
+}
+
+/* ══════════════════════════════════════════
+   COMPANY CARD
+══════════════════════════════════════════ */
+.ccard{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  padding:22px;cursor:pointer;
+  transition:all .25s cubic-bezier(.4,0,.2,1);
+  animation:fadeUp .45s ease both;
+  position:relative;overflow:hidden;
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.ccard:hover{
+  border-color:var(--border2);
+  box-shadow:var(--shadow2);
+  transform:translateY(-3px);
+}
+.ccard::before{
+  content:'';
+  position:absolute;top:0;left:0;right:0;height:3px;
+  background:var(--accent);
+  transform:scaleX(0);transform-origin:left;
+  transition:transform .25s;
+}
+.ccard:hover::before{transform:scaleX(1);}
+.ctop{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;}
+.cfav{
+  width:48px;height:48px;border-radius:10px;
+  border:1px solid var(--border);
+  background:var(--bg2);
+  object-fit:contain;padding:5px;
+  transition:box-shadow .25s;
+}
+.ccard:hover .cfav{box-shadow:0 0 0 3px var(--accentBg);}
+.cbadge{
+  display:flex;align-items:center;gap:5px;
+  font-family:'DM Mono',monospace;font-size:.58rem;
+  letter-spacing:.08em;padding:3px 8px;
+  border-radius:20px;border:1px solid var(--border);
+  color:var(--ink3);
+}
+.cbadge .bdot{width:5px;height:5px;border-radius:50%;}
+.br .bdot{background:#22c55e;}
+.bl .bdot{background:#f59e0b;animation:pulse 1s ease-in-out infinite;}
+.be .bdot{background:var(--ink4);}
+.cname{font-size:1rem;font-weight:700;color:var(--ink);margin-bottom:4px;}
+.curl{
+  font-family:'DM Mono',monospace;font-size:.68rem;
+  color:var(--accent);text-decoration:none;opacity:.8;
+  display:block;margin-bottom:14px;word-break:break-all;
+}
+.curl:hover{opacity:1;}
+.cinfos{
+  display:flex;flex-direction:column;gap:6px;
+  padding-top:14px;border-top:1px solid var(--border);
+}
+.ci{
+  display:flex;align-items:flex-start;gap:8px;
+  font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);
+  line-height:1.4;
+}
+.ci .ico{flex-shrink:0;width:14px;text-align:center;margin-top:1px;}
+.ci.has{color:var(--ink2);}
+.ci.has .ico{color:var(--accent);}
+.cfetch{
+  margin-top:14px;width:100%;padding:9px;
+  border-radius:var(--rs);
+  border:1.5px dashed var(--border2);
+  background:transparent;color:var(--ink3);
+  font-family:'DM Mono',monospace;font-size:.66rem;
+  letter-spacing:.08em;text-transform:uppercase;
+  cursor:pointer;transition:all .2s;
+}
+.cfetch:hover{border-color:var(--accent);color:var(--accent);background:var(--accentBg);}
+
+/* ══════════════════════════════════════════
+   MODAL
+══════════════════════════════════════════ */
+.moverlay{
+  position:fixed;inset:0;z-index:200;
+  background:rgba(26,24,20,.6);
+  backdrop-filter:blur(10px);
+  display:flex;align-items:center;justify-content:center;padding:20px;
+  opacity:0;pointer-events:none;transition:opacity .3s;
+}
+[data-theme="dark"] .moverlay{background:rgba(0,0,0,.75);}
+.moverlay.open{opacity:1;pointer-events:all;}
+.modal{
+  width:100%;max-width:640px;max-height:90vh;overflow-y:auto;
+  background:var(--surface);
+  border:1px solid var(--border2);border-radius:20px;
+  box-shadow:0 40px 100px rgba(0,0,0,.25);
+  transform:translateY(16px) scale(.97);
+  transition:transform .3s cubic-bezier(.4,0,.2,1);
+}
+.moverlay.open .modal{transform:translateY(0) scale(1);}
+.mhead{
+  padding:26px 26px 0;display:flex;
+  align-items:flex-start;justify-content:space-between;gap:16px;
+}
+.mhl{display:flex;align-items:center;gap:16px;}
+.mfav{
+  width:64px;height:64px;border-radius:13px;
+  border:1px solid var(--border2);background:var(--bg2);
+  object-fit:contain;padding:7px;
+  box-shadow:0 0 0 4px var(--accentBg);
+}
+.minfo h2{
+  font-family:'Playfair Display',serif;
+  font-size:1.45rem;font-weight:700;color:var(--ink);
+}
+.minfo a{
+  font-family:'DM Mono',monospace;font-size:.7rem;
+  color:var(--accent);text-decoration:none;
+}
+.minfo a:hover{text-decoration:underline;}
+.mclose{
+  width:32px;height:32px;border-radius:50%;
+  border:1px solid var(--border2);background:var(--bg2);
+  color:var(--ink3);cursor:pointer;font-size:.95rem;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s;flex-shrink:0;
+}
+.mclose:hover{border-color:var(--accent);color:var(--accent);}
+.mbody{padding:22px 26px 26px;}
+.msec{
+  font-family:'DM Mono',monospace;font-size:.6rem;
+  color:var(--ink3);letter-spacing:.15em;text-transform:uppercase;
+  margin-bottom:12px;display:flex;align-items:center;gap:8px;
+}
+.msec::after{content:'';flex:1;height:1px;background:var(--border);}
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;}
+.cb{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--rs);padding:13px;
+  text-decoration:none;display:block;transition:all .2s;
+}
+.cb:hover{border-color:var(--border2);background:var(--bg3);}
+.cblbl{
+  font-family:'DM Mono',monospace;font-size:.56rem;
+  color:var(--ink3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px;
+}
+.cbval{font-family:'DM Mono',monospace;font-size:.76rem;color:var(--ink);word-break:break-all;}
+.cbval.empty{color:var(--ink4);font-style:italic;}
+.cb.full{grid-column:1/-1;}
+.arow{display:flex;gap:10px;flex-wrap:wrap;}
+.abtn{
+  padding:8px 16px;border-radius:var(--rs);
+  border:1px solid var(--border2);background:var(--bg2);
+  color:var(--ink2);font-family:'DM Mono',monospace;font-size:.68rem;
+  letter-spacing:.06em;cursor:pointer;text-decoration:none;
+  transition:all .2s;display:inline-flex;align-items:center;gap:5px;
+}
+.abtn:hover{border-color:var(--accent);color:var(--accent);background:var(--accentBg);}
+.abtn.prime{background:var(--ink);border-color:var(--ink);color:var(--bg);font-weight:600;}
+.abtn.prime:hover{background:var(--accent);border-color:var(--accent);box-shadow:0 4px 16px rgba(212,65,12,.25);}
+.scanbox{
+  display:flex;align-items:center;gap:12px;padding:13px 16px;
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--rs);
+  margin-bottom:18px;font-family:'DM Mono',monospace;font-size:.74rem;color:var(--ink3);
+}
+.spin{width:13px;height:13px;border-radius:50%;border:2px solid var(--border2);border-top-color:var(--accent);animation:spin .8s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hint-box{
+  margin-top:14px;padding:12px 14px;
+  background:var(--accentBg);border:1px solid var(--accentBdr);
+  border-radius:var(--rs);
+  font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);line-height:1.6;
+}
+
+/* ══════════════════════════════════════════
+   ADMIN
+══════════════════════════════════════════ */
+.aoverlay{
+  position:fixed;inset:0;z-index:300;
+  background:rgba(26,24,20,.65);backdrop-filter:blur(14px);
+  display:flex;align-items:center;justify-content:center;padding:20px;
+  opacity:0;pointer-events:none;transition:opacity .3s;
+}
+[data-theme="dark"] .aoverlay{background:rgba(0,0,0,.8);}
+.aoverlay.open{opacity:1;pointer-events:all;}
+.apanel{
+  width:100%;max-width:520px;
+  background:var(--surface);
+  border:1px solid var(--border2);border-radius:20px;
+  box-shadow:0 40px 100px rgba(0,0,0,.2);
+  transform:scale(.95);transition:transform .3s;overflow:hidden;
+}
+.aoverlay.open .apanel{transform:scale(1);}
+.ahead{
+  padding:20px 24px;background:var(--ink);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.ahead h3{
+  font-family:'Playfair Display',serif;
+  font-size:1.1rem;font-weight:700;color:var(--bg);letter-spacing:.01em;
+}
+.ahead .mclose{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:rgba(247,245,240,.7);}
+.ahead .mclose:hover{border-color:var(--accent2);color:var(--accent2);}
+.atabs{display:flex;border-bottom:1px solid var(--border);}
+.atab{
+  padding:12px 18px;font-family:'DM Mono',monospace;font-size:.68rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);
+  cursor:pointer;border-bottom:2px solid transparent;
+  background:none;border-top:none;border-left:none;border-right:none;transition:all .2s;
+}
+.atab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.atab-c{display:none;padding:22px 24px;}
+.atab-c.active{display:block;}
+.flabel{
+  display:block;font-family:'DM Mono',monospace;font-size:.63rem;
+  color:var(--ink3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:7px;
+}
+.finput{
+  width:100%;padding:10px 13px;border-radius:var(--rs);
+  border:1px solid var(--border2);background:var(--bg2);color:var(--ink);
+  font-family:'DM Mono',monospace;font-size:.83rem;
+  outline:none;transition:all .2s;margin-bottom:13px;
+}
+.finput:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accentBg);}
+.finput::placeholder{color:var(--ink4);}
+.ferr{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--accent);min-height:16px;margin-bottom:10px;}
+.fbtns{display:flex;gap:10px;flex-wrap:wrap;}
+.fbtn{
+  padding:9px 16px;border-radius:var(--rs);border:1px solid var(--border2);
+  background:var(--bg2);color:var(--ink2);
+  font-family:'DM Mono',monospace;font-size:.68rem;letter-spacing:.06em;
+  cursor:pointer;transition:all .2s;text-transform:uppercase;
+}
+.fbtn:hover{border-color:var(--accent);color:var(--accent);background:var(--accentBg);}
+.fbtn.prime{background:var(--ink);border-color:var(--ink);color:var(--bg);font-weight:700;}
+.fbtn.prime:hover{background:var(--accent);border-color:var(--accent);}
+.fbtn.danger{border-color:rgba(220,38,38,.25);color:#dc2626;background:rgba(220,38,38,.05);}
+.fbtn.danger:hover{background:rgba(220,38,38,.12);border-color:#dc2626;}
+.alist{max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rs);}
+.ali{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 13px;border-bottom:1px solid var(--border);gap:10px;
+}
+.ali:last-child{border-bottom:none;}
+.ali-l{display:flex;align-items:center;gap:10px;min-width:0;}
+.ali-l img{width:22px;height:22px;border-radius:4px;object-fit:contain;}
+.ali-n{font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink2);}
+.ali-del{
+  width:26px;height:26px;border-radius:6px;border:1px solid transparent;
+  background:transparent;color:var(--ink4);cursor:pointer;font-size:.85rem;
+  display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0;
+}
+.ali-del:hover{border-color:#dc2626;color:#dc2626;background:rgba(220,38,38,.08);}
+.snote{
+  font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);
+  line-height:1.7;margin-bottom:18px;padding:13px;
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--rs);
+}
+.snote strong{color:var(--ink);}
+
+/* ══════════════════════════════════════════
+   TOAST
+══════════════════════════════════════════ */
+.tcon{position:fixed;bottom:calc(var(--ring-w) + 16px);right:calc(var(--ring-w) + 16px);z-index:500;display:flex;flex-direction:column;gap:10px;}
+.toast{
+  padding:10px 16px;border-radius:var(--rs);
+  background:var(--ink);color:var(--bg);
+  font-family:'DM Mono',monospace;font-size:.74rem;
+  box-shadow:var(--shadow2);max-width:300px;
+  display:flex;align-items:center;gap:8px;
+  animation:tin .3s ease,tout .3s ease 2.7s both;
+}
+.toast.ok::before{content:'✓';color:#22c55e;}
+.toast.err::before{content:'✕';color:#ef4444;}
+@keyframes tin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes tout{to{opacity:0;transform:translateY(6px)}}
+
+/* empty */
+.empty{grid-column:1/-1;text-align:center;padding:64px 20px;}
+.empty h3{font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:var(--ink3);margin-bottom:8px;}
+.empty p{font-family:'DM Mono',monospace;font-size:.76rem;color:var(--ink4);}
+
+/* scrollbar */
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px;}
+
+/* responsive */
+@media(max-width:700px){
+  :root{--ring-w:40px;}
+  .hero{grid-template-columns:1fr;padding:36px 20px 32px;}
+  .hero-stats{flex-direction:row;}
+  .hstat{border-bottom:none;border-right:1px solid var(--border);}
+  .hstat:last-child{border-right:none;}
+  .toolbar,.content{padding-left:20px;padding-right:20px;}
+  header{padding:0 16px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ LOCK SCREEN ══ -->
+<div id="lockScreen">
+  <div class="lock-card">
+    <div class="lock-band">
+      <div class="lb-icon">🔐</div>
+      <div><h1>Company Contacts</h1><p>Secure access required</p></div>
+    </div>
+    <div class="lock-form">
+      <label class="lf-label">Password</label>
+      <input type="password" class="lf-input" id="lockPw" placeholder="Enter password…">
+      <div class="lf-err" id="lockErr"></div>
+      <button class="lf-btn" onclick="doUnlock()">Unlock →</button>
+      <div style="margin-top:12px;font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink4);text-align:center;">Viewer: <code style="color:var(--accent)">2007</code> &nbsp;·&nbsp; Admin: <code style="color:var(--accent)">1995</code></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CORNER SQUARES ══ -->
+<div class="corner" id="cTL"><div class="corner-dot"></div></div>
+<div class="corner" id="cTR"><div class="corner-dot"></div></div>
+<div class="corner" id="cBL"><div class="corner-dot"></div></div>
+<div class="corner" id="cBR"><div class="corner-dot"></div></div>
+
+<!-- ══ PERIMETER RINGS ══ -->
+<div class="ring" id="ringTop">
+  <div class="ring-inner">
+    <div class="strip-track h scroll-left" id="trackTop"></div>
+  </div>
+</div>
+<div class="ring" id="ringBot">
+  <div class="ring-inner">
+    <div class="strip-track h scroll-right" id="trackBot"></div>
+  </div>
+</div>
+<div class="ring" id="ringLeft">
+  <div class="ring-inner">
+    <div class="strip-track v scroll-down" id="trackLeft"></div>
+  </div>
+</div>
+<div class="ring" id="ringRight">
+  <div class="ring-inner">
+    <div class="strip-track v scroll-up" id="trackRight"></div>
+  </div>
+</div>
+
+<!-- ══ MAIN PAGE ══ -->
+<div class="page">
+  <!-- HEADER -->
+  <header>
+    <div class="logo-wrap">
+      <span class="logo-name">Company <em>Contacts</em></span>
+      <span class="logo-tag">// directory</span>
+    </div>
+    <div class="header-right">
+      <div class="pill-count"><div class="dot"></div><span id="cntLbl">0 companies</span></div>
+      <button class="toggle-btn" id="themeToggle" title="Toggle dark mode" onclick="toggleTheme()"></button>
+      <button class="hbtn" id="adminBtn" onclick="openAdmin()">⚙ Admin</button>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-text">
+      <h2>All your<br><em>contacts,</em><br>one place.</h2>
+      <p>AI-powered contact discovery · live favicon previews · instant outreach links · synced from Google Sheets</p>
+    </div>
+    <div class="hero-stats">
+      <div class="hstat"><div class="hstat-n" id="sTotal">0</div><div class="hstat-l">Companies</div></div>
+      <div class="hstat"><div class="hstat-n" id="sFetched">0</div><div class="hstat-l">Fetched</div></div>
+      <div class="hstat"><div class="hstat-n" id="sEmails">0</div><div class="hstat-l">Emails</div></div>
+      <div class="hstat"><div class="hstat-n" id="sPhones">0</div><div class="hstat-l">Phones</div></div>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <span class="section-label">All Companies</span>
+    <div class="searchbox">
+      <span class="si">⌕</span>
+      <input type="text" id="searchInput" placeholder="Search by name or domain…" oninput="filterGrid()">
+    </div>
+  </div>
+
+  <!-- GRID -->
+  <div class="content">
+    <div class="grid" id="grid">
+      <div class="empty"><h3>Loading…</h3><p>Fetching from Google Sheets</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL ══ -->
+<div class="moverlay" id="moverlay" onclick="closeMod(event)">
+  <div class="modal">
+    <div class="mhead">
+      <div class="mhl">
+        <img class="mfav" id="mFav" src="" alt="">
+        <div class="minfo"><h2 id="mName"></h2><a id="mUrl" href="#" target="_blank"></a></div>
+      </div>
+      <button class="mclose" onclick="closeMod()">✕</button>
+    </div>
+    <div class="mbody" id="mbody"></div>
+  </div>
+</div>
+
+<!-- ══ ADMIN ══ -->
+<div class="aoverlay" id="aoverlay" onclick="closeAdminOut(event)">
+  <div class="apanel">
+    <div class="ahead"><h3>Admin Panel</h3><button class="mclose" onclick="closeAdmin()">✕</button></div>
+    <div id="adminBody"></div>
+  </div>
+</div>
+
+<!-- ══ TOASTS ══ -->
+<div class="tcon" id="tcon"></div>
+
+<script>
+/* ─────────────────────────────
+   CONFIG & STATE
+───────────────────────────── */
+const LOGIN_PW  = '2007';
+const ADMIN_PW  = '1995';
+const SHEET_ID  = '1tRqt75OIstbbj-bsLUVC8kwVBburmbYMWuTiN7t7wys';
+const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
+const STORE_KEY = 'cc_v5';
+const MODEL     = 'claude-sonnet-4-20250514';
+let companies = [], cache = {}, isAdmin = false, openModalId = null;
+
+/* ─────────────────────────────
+   THEME
+───────────────────────────── */
+const savedTheme = localStorage.getItem('cc_theme') || 'light';
+document.documentElement.setAttribute('data-theme', savedTheme);
+
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme');
+  const next = cur === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('cc_theme', next);
+}
+
+/* ─────────────────────────────
+   LOCK
+───────────────────────────── */
+document.getElementById('lockPw').addEventListener('keydown', e => { if(e.key==='Enter') doUnlock(); });
+
+function doUnlock() {
+  const v = document.getElementById('lockPw').value;
+  if (v === LOGIN_PW || v === ADMIN_PW) {
+    if (v === ADMIN_PW) { isAdmin = true; document.getElementById('adminBtn').classList.add('admin-on'); }
+    document.getElementById('lockScreen').style.display = 'none';
+    loadStore();
+    renderAll();
+    syncSheet();
+  } else {
+    document.getElementById('lockErr').textContent = '✕ Incorrect password';
+    document.getElementById('lockPw').value = '';
+  }
+}
+
+/* ─────────────────────────────
+   STORAGE
+───────────────────────────── */
+function loadStore() {
+  try { const d = JSON.parse(localStorage.getItem(STORE_KEY)||'{}'); companies = d.companies||[]; cache = d.cache||{}; } catch(e) {}
+}
+function saveStore() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({companies, cache})); } catch(e) {}
+}
+
+/* ─────────────────────────────
+   SHEET SYNC
+───────────────────────────── */
+async function syncSheet() {
+  try {
+    const r = await fetch(SHEET_URL);
+    if (!r.ok) throw new Error('not public');
+    const csv = await r.text();
+    const rows = parseCSV(csv);
+    rows.forEach(row => {
+      const ex = companies.find(c => c.name.toLowerCase() === row.name.toLowerCase());
+      if (!ex) companies.push({ id: uid(), name: row.name, url: norm(row.url), addedAt: Date.now() });
+      else if (row.url && !ex.url) ex.url = norm(row.url);
+      const c = companies.find(c => c.name.toLowerCase() === row.name.toLowerCase());
+      if (c && (row.email||row.phone||row.other) && !cache[c.id]?.scraped) {
+        cache[c.id] = { email: row.email||null, phone: row.phone||null, other: row.other||null, scraped: !!(row.email||row.phone), fromSheet: true };
+      }
+    });
+    saveStore(); renderAll();
+    toast('Synced from Google Sheets', 'ok');
+  } catch(e) {
+    if (companies.length === 0) toast('Sheet not public — add companies via Admin', 'err');
+  }
+}
+
+function parseCSV(csv) {
+  const lines = csv.trim().split('\n'); if (lines.length < 2) return [];
+  const hdr = lines[0].split(',').map(h => h.replace(/"/g,'').trim().toLowerCase());
+  const nI = hdr.findIndex(h => h.includes('company')||h.includes('name'));
+  const uI = hdr.findIndex(h => h.includes('website')||h.includes('url')||h.includes('domain')||h.includes('web'));
+  const eI = hdr.findIndex(h => h.includes('email'));
+  const pI = hdr.findIndex(h => h.includes('phone'));
+  const oI = hdr.findIndex(h => h.includes('other')||h.includes('contact info'));
+  if (nI < 0) return [];
+  const res = [];
+  for (let i = 1; i < lines.length; i++) {
+    const c = csvSplit(lines[i]);
+    const name = (c[nI]||'').replace(/"/g,'').trim(); if (!name) continue;
+    res.push({ name, url: uI>=0?(c[uI]||'').replace(/"/g,'').trim():'', email: eI>=0?(c[eI]||'').replace(/"/g,'').trim():'', phone: pI>=0?(c[pI]||'').replace(/"/g,'').trim():'', other: oI>=0?(c[oI]||'').replace(/"/g,'').trim():'' });
+  }
+  return res;
+}
+function csvSplit(line) {
+  const r=[]; let cur='',q=false;
+  for (const ch of line) { if(ch==='"'){q=!q;}else if(ch===','&&!q){r.push(cur);cur='';}else{cur+=ch;} }
+  r.push(cur); return r;
+}
+
+/* ─────────────────────────────
+   RENDER ALL
+───────────────────────────── */
+function renderAll() {
+  updateStats();
+  buildRings();
+  renderGrid(companies);
+  document.getElementById('cntLbl').textContent = `${companies.length} ${companies.length===1?'company':'companies'}`;
+}
+function updateStats() {
+  document.getElementById('sTotal').textContent   = companies.length;
+  document.getElementById('sFetched').textContent = companies.filter(c=>cache[c.id]?.scraped).length;
+  document.getElementById('sEmails').textContent  = companies.filter(c=>cache[c.id]?.email).length;
+  document.getElementById('sPhones').textContent  = companies.filter(c=>cache[c.id]?.phone).length;
+}
+
+/* ─────────────────────────────
+   PERIMETER RINGS
+───────────────────────────── */
+function buildRings() {
+  if (!companies.length) {
+    ['trackTop','trackBot','trackLeft','trackRight'].forEach(id => { document.getElementById(id).innerHTML = ''; });
+    return;
+  }
+  // Each ring gets the full list duplicated for seamless loop
+  const list = [...companies, ...companies, ...companies]; // triple to ensure coverage
+
+  function chipH(c) {
+    return `<div class="lchip" onclick="openModal('${c.id}')">
+      <img src="${fav(c.url)}" alt="" onerror="this.src='${fav('')}'">
+      <div class="ltip">${c.name}</div>
+    </div>`;
+  }
+  function chipV(c) {
+    return `<div class="lchip vert" onclick="openModal('${c.id}')">
+      <img src="${fav(c.url)}" alt="" onerror="this.src='${fav('')}'">
+      <div class="ltip">${c.name}</div>
+    </div>`;
+  }
+
+  const hHTML = list.map(chipH).join('');
+  const vHTML = list.map(chipV).join('');
+
+  const top   = document.getElementById('trackTop');
+  const bot   = document.getElementById('trackBot');
+  const left  = document.getElementById('trackLeft');
+  const right = document.getElementById('trackRight');
+
+  top.innerHTML   = hHTML;
+  bot.innerHTML   = hHTML;
+  left.innerHTML  = vHTML;
+  right.innerHTML = vHTML;
+
+  // Speed based on count
+  const dur = Math.max(18, companies.length * 2) + 's';
+  [top, bot, left, right].forEach(t => t.style.setProperty('--dur', dur));
+}
+
+/* ─────────────────────────────
+   GRID
+───────────────────────────── */
+function renderGrid(list) {
+  const g = document.getElementById('grid');
+  if (!list.length) {
+    g.innerHTML = `<div class="empty"><h3>No Companies</h3><p>Add via Admin or publish your Google Sheet</p></div>`;
+    return;
+  }
+  g.innerHTML = list.map((c,i) => cardHTML(c,i)).join('');
+}
+
+function cardHTML(c, i) {
+  const ct = cache[c.id] || {};
+  const bc  = ct.scraped ? 'br' : ct.loading ? 'bl' : 'be';
+  const btx = ct.scraped ? 'fetched' : ct.loading ? 'scanning…' : 'pending';
+  return `<div class="ccard" style="animation-delay:${i*.04}s" id="cc-${c.id}" onclick="openModal('${c.id}')">
+    <div class="ctop">
+      <img class="cfav" src="${fav(c.url)}" alt="${c.name}" onerror="this.src='${fav('')}'">
+      <div class="cbadge ${bc}"><div class="bdot"></div>${btx}</div>
+    </div>
+    <div class="cname">${c.name}</div>
+    ${c.url
+      ? `<a class="curl" href="${c.url}" target="_blank" onclick="event.stopPropagation()">${dom(c.url)}</a>`
+      : `<span class="curl" style="color:var(--ink4)">No website</span>`}
+    <div class="cinfos">
+      <div class="ci ${ct.email?'has':''}"><span class="ico">✉</span><span>${ct.email||'Email not yet fetched'}</span></div>
+      <div class="ci ${ct.phone?'has':''}"><span class="ico">☎</span><span>${ct.phone||'Phone not yet fetched'}</span></div>
+    </div>
+    <button class="cfetch" onclick="event.stopPropagation();fetchContact('${c.id}')">
+      ${ct.scraped ? '↻ Re-fetch contacts' : '→ Fetch contact info'}
+    </button>
+  </div>`;
+}
+
+function filterGrid() {
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  renderGrid(q ? companies.filter(c => c.name.toLowerCase().includes(q)||(c.url||'').toLowerCase().includes(q)) : companies);
+}
+
+/* ─────────────────────────────
+   MODAL
+───────────────────────────── */
+function openModal(id) {
+  const c = companies.find(x => x.id===id); if (!c) return;
+  openModalId = id;
+  const fv = document.getElementById('mFav');
+  fv.src = fav(c.url); fv.onerror = () => { fv.src = fav(''); };
+  document.getElementById('mName').textContent = c.name;
+  const ua = document.getElementById('mUrl');
+  ua.href = c.url||'#'; ua.textContent = c.url ? dom(c.url) : 'No website';
+  renderModal(c);
+  document.getElementById('moverlay').classList.add('open');
+}
+
+function renderModal(c) {
+  const ct = cache[c.id] || {};
+  if (ct.loading) {
+    document.getElementById('mbody').innerHTML = `<div class="scanbox"><div class="spin"></div>AI is scanning ${dom(c.url||'website')} for contact details…</div>`;
+    return;
+  }
+  let h = `<div class="msec">Contact Details</div>
+  <div class="cgrid">
+    <a class="cb" ${ct.email?`href="mailto:${ct.email}"`:''}><div class="cblbl">✉ Email</div><div class="cbval ${ct.email?'':'empty'}">${ct.email||'Not found'}</div></a>
+    <a class="cb" ${ct.phone?`href="tel:${ct.phone}"`:''}><div class="cblbl">☎ Phone</div><div class="cbval ${ct.phone?'':'empty'}">${ct.phone||'Not found'}</div></a>
+    <a class="cb full" ${ct.contactPage?`href="${ct.contactPage}" target="_blank"`:''}><div class="cblbl">🔗 Contact / Enquiry Page</div><div class="cbval ${ct.contactPage?'':'empty'}">${ct.contactPage||'Not found'}</div></a>
+  </div>`;
+  if (ct.description) h += `<div class="msec">About</div><div style="font-family:'DM Mono',monospace;font-size:.74rem;color:var(--ink2);line-height:1.7;margin-bottom:20px;padding:13px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rs)">${ct.description}</div>`;
+  if (ct.other) h += `<div class="msec">Other Info</div><div style="font-family:'DM Mono',monospace;font-size:.73rem;color:var(--ink2);line-height:1.7;margin-bottom:20px;padding:13px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rs)">${ct.other}</div>`;
+  h += `<div class="msec">Actions</div><div class="arow">
+    ${c.url?`<a href="${c.url}" target="_blank" class="abtn prime">→ Website</a>`:''}
+    ${ct.email?`<a href="mailto:${ct.email}" class="abtn">✉ Email</a>`:''}
+    ${ct.contactPage?`<a href="${ct.contactPage}" target="_blank" class="abtn">📝 Enquiry Form</a>`:''}
+    <button class="abtn" onclick="fetchContact('${c.id}')">${ct.scraped?'↻ Re-fetch':'⟳ Fetch Contacts'}</button>
+  </div>`;
+  if (!ct.scraped && !ct.loading) h += `<div class="hint-box">Click "Fetch Contacts" — AI will scan this company's website for email, phone, and enquiry form links.</div>`;
+  document.getElementById('mbody').innerHTML = h;
+}
+
+function closeMod(e) {
+  if (e && e.target !== document.getElementById('moverlay')) return;
+  document.getElementById('moverlay').classList.remove('open');
+  openModalId = null;
+}
+
+/* ─────────────────────────────
+   CONTACT FETCH
+───────────────────────────── */
+async function fetchContact(id) {
+  const c = companies.find(x => x.id===id); if (!c) return;
+  if (!c.url) { toast('No website URL for this company', 'err'); return; }
+  if (!cache[id]) cache[id] = {};
+  cache[id].loading = true; cache[id].scraped = false;
+  const el = document.getElementById(`cc-${id}`); if (el) el.outerHTML = cardHTML(c, 0);
+  if (openModalId === id) renderModal(c);
+  toast(`Scanning ${c.name}…`, 'ok');
+  try {
+    const res = await callClaude(c.name, c.url);
+    cache[id] = { ...res, loading: false, scraped: true, fetchedAt: Date.now() };
+    saveStore(); toast(`Contacts fetched for ${c.name}`, 'ok');
+  } catch(e) {
+    cache[id] = { loading: false, scraped: false };
+    toast(e.message, 'err');
+  }
+  updateStats();
+  const el2 = document.getElementById(`cc-${id}`); if (el2) el2.outerHTML = cardHTML(c, 0);
+  if (openModalId === id) renderModal(c);
+}
+
+async function callClaude(name, url) {
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: MODEL, max_tokens: 1024,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      messages: [{ role: 'user', content: `You are a contact information extractor. For the company "${name}" with website ${url}, search the web and visit their website. Find:\n1. Email address (check Contact Us, footer, mailto links)\n2. Phone number (tel links, footer, Contact page)\n3. URL of their Contact Us or enquiry page\n4. One sentence about what the company does\n\nReturn ONLY valid JSON, no markdown:\n{"email":null,"phone":null,"contactPage":null,"description":null,"other":null}\nUse null for missing fields. "other" can list LinkedIn/Twitter URLs.` }]
+    })
+  });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error?.message||`API error ${r.status}`); }
+  const d = await r.json();
+  const txt = (d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+  const m = txt.match(/\{[\s\S]*\}/); if (!m) throw new Error('No JSON in response');
+  const p = JSON.parse(m[0]);
+  const clean = v => v && v !== 'null' ? v : null;
+  return { email: clean(p.email), phone: clean(p.phone), contactPage: clean(p.contactPage), description: clean(p.description), other: clean(p.other) };
+}
+
+/* ─────────────────────────────
+   ADMIN
+───────────────────────────── */
+function openAdmin() { renderAdminBody(); document.getElementById('aoverlay').classList.add('open'); }
+function closeAdmin() { document.getElementById('aoverlay').classList.remove('open'); }
+function closeAdminOut(e) { if(e.target===document.getElementById('aoverlay')) closeAdmin(); }
+
+function renderAdminBody() {
+  const el = document.getElementById('adminBody');
+  if (!isAdmin) {
+    el.innerHTML = `<div style="padding:24px">
+      <p style="font-family:'DM Mono',monospace;font-size:.74rem;color:var(--ink3);line-height:1.7;margin-bottom:18px">Enter the admin password to manage companies.</p>
+      <label class="flabel">Admin Password</label>
+      <input type="password" class="finput" id="aPwIn" placeholder="Enter admin password…" onkeydown="if(event.key==='Enter')doAdminLogin()">
+      <div class="ferr" id="aErr"></div>
+      <div class="fbtns"><button class="fbtn prime" onclick="doAdminLogin()">→ Login</button></div>
+    </div>`;
+    setTimeout(() => document.getElementById('aPwIn')?.focus(), 80);
+  } else {
+    el.innerHTML = `<div class="atabs">
+      <button class="atab active" onclick="swTab('add',this)">Add Company</button>
+      <button class="atab" onclick="swTab('manage',this)">Manage (${companies.length})</button>
+      <button class="atab" onclick="swTab('sync',this)">Sheet Sync</button>
+    </div>
+    <div class="atab-c active" id="atab-add">
+      <label class="flabel">Company Name *</label>
+      <input type="text" class="finput" id="newName" placeholder="e.g. Infosys" onkeydown="if(event.key==='Enter')document.getElementById('newUrl').focus()">
+      <label class="flabel">Website URL</label>
+      <input type="text" class="finput" id="newUrl" placeholder="e.g. https://infosys.com" onkeydown="if(event.key==='Enter')addCo(true)">
+      <div class="ferr" id="addErr"></div>
+      <div class="fbtns">
+        <button class="fbtn prime" onclick="addCo(true)">+ Add & Fetch Contacts</button>
+        <button class="fbtn" onclick="addCo(false)">+ Add Only</button>
+      </div>
+    </div>
+    <div class="atab-c" id="atab-manage">
+      <div class="alist" id="alist"></div>
+      <div style="margin-top:14px"><button class="fbtn danger" onclick="clearAll()">✕ Clear All Data</button></div>
+    </div>
+    <div class="atab-c" id="atab-sync">
+      <div class="snote">To auto-sync, publish your Google Sheet:<br><strong>File → Share → Publish to web → CSV → Publish</strong><br><br>Sheet ID: <span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:.7rem">${SHEET_ID}</span></div>
+      <div class="fbtns">
+        <button class="fbtn prime" onclick="syncSheet()">↻ Sync Sheet Now</button>
+        <button class="fbtn" onclick="fetchAll()">⟳ Fetch All Contacts</button>
+      </div>
+    </div>`;
+    renderAlist();
+    setTimeout(() => document.getElementById('newName')?.focus(), 80);
+  }
+}
+
+function doAdminLogin() {
+  const v = document.getElementById('aPwIn').value;
+  if (v === ADMIN_PW) { isAdmin = true; document.getElementById('adminBtn').classList.add('admin-on'); renderAdminBody(); }
+  else document.getElementById('aErr').textContent = '✕ Incorrect admin password';
+}
+
+function swTab(name, el) {
+  document.querySelectorAll('.atab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.atab-c').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(`atab-${name}`)?.classList.add('active');
+  if (name === 'manage') renderAlist();
+}
+
+function renderAlist() {
+  const el = document.getElementById('alist'); if (!el) return;
+  if (!companies.length) { el.innerHTML = `<div style="padding:20px;text-align:center;font-family:'DM Mono',monospace;font-size:.74rem;color:var(--ink4)">No companies yet</div>`; return; }
+  el.innerHTML = companies.map(c => `<div class="ali">
+    <div class="ali-l"><img src="${fav(c.url)}" alt="" onerror="this.src='${fav('')}'"><span class="ali-n">${c.name}</span></div>
+    <button class="ali-del" onclick="delCo('${c.id}')">✕</button>
+  </div>`).join('');
+}
+
+function addCo(doFetch=true) {
+  const name = document.getElementById('newName')?.value?.trim();
+  const url  = document.getElementById('newUrl')?.value?.trim();
+  const err  = document.getElementById('addErr');
+  if (!name) { err.textContent='Company name required'; return; }
+  if (companies.find(c => c.name.toLowerCase()===name.toLowerCase())) { err.textContent='Already exists'; return; }
+  err.textContent='';
+  const c = { id: uid(), name, url: norm(url), addedAt: Date.now() };
+  companies.push(c); saveStore(); renderAll(); closeAdmin();
+  toast(`${name} added`, 'ok');
+  if (doFetch && c.url) setTimeout(() => fetchContact(c.id), 600);
+}
+
+function delCo(id) {
+  const c = companies.find(x => x.id===id);
+  companies = companies.filter(x => x.id!==id); delete cache[id];
+  saveStore(); renderAll(); renderAlist();
+  toast(`${c?.name} removed`, 'ok');
+}
+
+function clearAll() {
+  if (!confirm('Delete ALL companies and contact data?')) return;
+  companies = []; cache = {}; saveStore(); renderAll(); renderAdminBody();
+  toast('All data cleared', 'ok');
+}
+
+async function fetchAll() {
+  const pending = companies.filter(c => c.url && !cache[c.id]?.scraped);
+  if (!pending.length) { toast('All companies already have contact data', 'ok'); return; }
+  closeAdmin(); toast(`Fetching ${pending.length} companies…`, 'ok');
+  for (const c of pending) { await fetchContact(c.id); await new Promise(r=>setTimeout(r,1600)); }
+  toast('All contacts fetched', 'ok');
+}
+
+/* ─────────────────────────────
+   HELPERS
+───────────────────────────── */
+function uid()  { return Math.random().toString(36).slice(2,10); }
+function norm(u){ if(!u)return''; u=u.trim(); if(!u.startsWith('http'))u='https://'+u; return u.replace(/\/$/,''); }
+function dom(u) { try { return new URL(u).hostname.replace('www.',''); } catch(e) { return u; } }
+function fav(u) { const d=u?dom(u):'example.com'; return `https://www.google.com/s2/favicons?domain=${d}&sz=128`; }
+function toast(msg, type='ok') {
+  const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg;
+  document.getElementById('tcon').appendChild(el);
+  setTimeout(()=>el.remove(), 3200);
+}
+</script>
+</body>
+</html>
