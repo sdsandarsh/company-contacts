@@ -1032,27 +1032,83 @@ function findContactLink(html, baseUrl) {
   return null;
 }
 
+/* ── Discover website URL from company name via DuckDuckGo ── */
+async function discoverUrl(companyName) {
+  // Try DuckDuckGo Instant Answer API first (returns AbstractURL for well-known companies)
+  try {
+    const ddg = await fetch(
+      `https://api.allorigins.win/get?url=${encodeURIComponent(`https://api.duckduckgo.com/?q=${encodeURIComponent(companyName + ' official website')}&format=json&no_redirect=1`)}`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (ddg.ok) {
+      const d = await ddg.json();
+      const j = JSON.parse(d.contents || '{}');
+      // AbstractURL is the official site for known entities
+      if (j.AbstractURL && j.AbstractURL.startsWith('http')) return j.AbstractURL;
+      // Check related topics for a direct website
+      const topics = j.RelatedTopics || [];
+      for (const t of topics) {
+        const url = t.FirstURL || '';
+        if (url.startsWith('http') && !url.includes('duckduckgo')) return url;
+      }
+    }
+  } catch(_) {}
+
+  // Fallback: build a plausible URL from company name
+  // e.g. "DataRobot" → datarobot.com, "Tata Consultancy" → tataconsultancy.com
+  const slug = companyName.toLowerCase()
+    .replace(/\s+(pvt|ltd|limited|inc|llc|corp|&|and|the|co|group)\b/gi, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+  // Try .com, .io, .ai in order
+  const guesses = [`https://www.${slug}.com`, `https://${slug}.com`, `https://www.${slug}.io`, `https://www.${slug}.ai`];
+  for (const guess of guesses) {
+    try {
+      const test = await proxyFetch(guess);
+      if (test && test.length > 1000) return guess;
+    } catch(_) {}
+  }
+  return guesses[0]; // return best guess even unverified
+}
+
 async function fetchContact(id) {
   const c = companies.find(x => x.id === id); if (!c) return;
-  if (!c.url) { toast(`${c.name} has no website URL — add one in Admin`, 'err'); return; }
 
   if (!cache[id]) cache[id] = {};
   cache[id].loading = true; cache[id].scraped = false;
   const el = document.getElementById(`cc-${id}`); if (el) el.outerHTML = cardHTML(c, 0);
   if (openModalId === id) renderModal(c);
-  toast(`Scanning ${c.name}…`, 'ok');
 
   const result = { email: null, phone: null, contactPage: null, linkedin: null, twitter: null };
 
   try {
+    // Step 0: Auto-discover URL if not set
+    let siteUrl = c.url;
+    if (!siteUrl) {
+      toast(`Finding website for ${c.name}…`, 'ok');
+      siteUrl = await discoverUrl(c.name);
+      if (siteUrl) {
+        c.url = norm(siteUrl);
+        saveStore();
+        toast(`Found: ${dom(siteUrl)} — now scraping…`, 'ok');
+        // Refresh favicon now that we have a URL
+        const favEl = document.getElementById(`fav-${id}`);
+        if (favEl) setFavWithFallback(favEl, c.url, c.name);
+      } else {
+        throw new Error(`Could not find a website for "${c.name}" — add URL manually`);
+      }
+    } else {
+      toast(`Scanning ${c.name}…`, 'ok');
+    }
+
     // 1. Fetch homepage
-    const homeHtml = await proxyFetch(c.url);
+    const homeHtml = await proxyFetch(siteUrl);
     extractFromHtml(homeHtml, result);
 
     // 2. Find & fetch contact page link from homepage
     if (homeHtml && (!result.email || !result.phone)) {
-      const cLink = findContactLink(homeHtml, c.url);
-      if (cLink && cLink !== c.url) {
+      const cLink = findContactLink(homeHtml, siteUrl);
+      if (cLink && cLink !== siteUrl) {
         result.contactPage = cLink;
         const cHtml = await proxyFetch(cLink);
         extractFromHtml(cHtml, result);
@@ -1063,7 +1119,7 @@ async function fetchContact(id) {
     if (!result.email || !result.phone) {
       for (const slug of CONTACT_SLUGS) {
         if (result.email && result.phone) break;
-        const tryUrl = c.url.replace(/\/$/, '') + slug;
+        const tryUrl = siteUrl.replace(/\/$/, '') + slug;
         if (tryUrl === result.contactPage) continue;
         const html = await proxyFetch(tryUrl);
         if (html && html.length > 500) {
