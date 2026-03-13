@@ -465,21 +465,47 @@ header{
 .empty{grid-column:1/-1;text-align:center;padding:64px 20px;}
 .empty h3{font-family:'Sora',sans-serif;font-size:1.6rem;font-weight:700;color:var(--ink3);margin-bottom:8px;}
 .empty p{font-size:.82rem;color:var(--ink4);}
-/* sync error banner */
-#syncBanner { transition: background .3s; }
-[data-theme="dark"] #syncBanner {
-  background: #1c1a08 !important;
-  border-color: #854d0e !important;
-  color: #fef08a !important;
+/* ── sync error banner ── */
+.sync-banner {
+  position:sticky;top:62px;z-index:90;
+  background:#fefce8;border-bottom:2px solid #fde047;
+  padding:14px 40px;display:flex;align-items:flex-start;gap:14px;
+  font-size:.82rem;font-weight:500;
+  transition:background .3s, border-color .3s, color .3s;
 }
-[data-theme="dark"] #syncBanner strong { color: #fef9c3; }
-[data-theme="dark"] #syncBanner span { color: #fde68a !important; }
-[data-theme="dark"] #syncBanner button,
-[data-theme="dark"] #syncBanner a {
-  border-color: #854d0e !important;
-  color: #fef08a !important;
-  background: rgba(255,255,255,.05) !important;
+[data-theme="dark"] .sync-banner {
+  background:#1c1a0a;border-bottom-color:#78350f;
 }
+.sb-icon { font-size:1.2rem;flex-shrink:0; }
+.sb-body { flex:1; }
+.sb-title { display:block;margin-bottom:4px;font-weight:700;color:#713f12; }
+[data-theme="dark"] .sb-title { color:#fef08a; }
+.sb-reason { font-size:.77rem;color:#92400e; }
+[data-theme="dark"] .sb-reason { color:#fde68a; }
+.sb-actions { margin-top:8px;display:flex;gap:8px;flex-wrap:wrap; }
+.sb-btn {
+  padding:6px 14px;border-radius:8px;border:1.5px solid #92400e;
+  background:#fff;color:#92400e;font-size:.75rem;font-weight:700;
+  cursor:pointer;text-decoration:none;transition:all .2s;
+}
+.sb-btn:hover { background:#fef3c7; }
+[data-theme="dark"] .sb-btn {
+  border-color:#92400e;background:rgba(255,255,255,.07);color:#fde68a;
+}
+[data-theme="dark"] .sb-btn:hover { background:rgba(255,255,255,.13); }
+.sb-close {
+  background:none;border:none;cursor:pointer;font-size:1.1rem;
+  color:#92400e;flex-shrink:0;padding:0;line-height:1;
+}
+[data-theme="dark"] .sb-close { color:#fde68a; }
+
+/* ── dark mode: form errors & toast ── */
+[data-theme="dark"] .lc-err,
+[data-theme="dark"] .ferr { color:#f87171; }
+[data-theme="dark"] .toast { background:#1e293b;color:#f1f5f9;border:1px solid var(--border2); }
+[data-theme="dark"] .toast.ok::before { color:#34d399; }
+[data-theme="dark"] .toast.err::before { color:#f87171; }
+[data-theme="dark"] .hint { background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.3);color:var(--ink2); }
 @media(max-width:700px){
   .hero,.toolbar,.content{padding-left:20px;padding-right:20px;}
   header{padding:0 16px;}
@@ -637,15 +663,27 @@ function buildCarouselBg(list) {
     const spd = ROW_SPEEDS[r];
     // double for seamless
     const doubled = [...items, ...items];
-    const chips = doubled.map(c =>
-      `<div class="cb-chip" onclick="openModal&&companies.find(x=>x.name===c?.name)&&openModal(companies.find(x=>x.name==='${c.name}')?.id)">
-        <img src="${fav(c.url)}" alt="" onerror="this.style.display='none'">
+    const chips = doubled.map(c => {
+      const cId = c.id || '';
+      const cbId = `cbimg-${cId}-${Math.random().toString(36).slice(2,6)}`;
+      return `<div class="cb-chip" onclick="${cId?`openModal('${cId}')`:''}">
+        <img id="${cbId}" src="" alt="" style="width:28px;height:28px;border-radius:6px;object-fit:contain;background:rgba(255,255,255,.08);padding:3px">
         <span>${c.name}</span>
-      </div>`
-    ).join('');
+      </div>`;
+    }).join('');
     html += `<div class="cb-row"><div class="cb-track ${dir}" style="--spd:${spd}">${chips}</div></div>`;
   }
   bg.innerHTML = html;
+  // Apply favicon cascade to all carousel chip images
+  setTimeout(() => {
+    const allItems = (list.length > 0 ? list : PLACEHOLDER_NAMES.map(n=>({name:n,url:''}))).concat(
+      list.length > 0 ? list : PLACEHOLDER_NAMES.map(n=>({name:n,url:''}))  // doubled
+    );
+    document.querySelectorAll('#carouselBg .cb-chip img').forEach((img, idx) => {
+      const c = allItems[idx % allItems.length];
+      if (c) setFavWithFallback(img, c.url || '', c.name);
+    });
+  }, 60);
 }
 
 buildCarouselBg([]);
@@ -725,36 +763,22 @@ function showSyncBanner(errDetail) {
   if (!b) {
     b = document.createElement('div');
     b.id = 'syncBanner';
-    b.style.cssText = `
-      position:sticky;top:62px;z-index:90;
-      background:#fefce8;border-bottom:2px solid #fde047;
-      padding:14px 40px;display:flex;align-items:flex-start;gap:14px;
-      font-size:.82rem;font-weight:500;color:#713f12;
-    `;
+    b.className = 'sync-banner';
     // Insert after header
     document.querySelector('header').after(b);
   }
   b.innerHTML = `
-    <span style="font-size:1.2rem;flex-shrink:0">⚠️</span>
-    <div style="flex:1">
-      <strong style="display:block;margin-bottom:4px">Could not load Google Sheet automatically</strong>
-      <span style="color:#92400e;font-size:.77rem">Reason: ${errDetail || 'Network or permissions error'}</span>
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-        <button onclick="openAdminToSync()" 
-          style="padding:6px 14px;border-radius:8px;border:1.5px solid #92400e;background:#fff;color:#92400e;font-size:.75rem;font-weight:700;cursor:pointer">
-          📋 Paste CSV manually
-        </button>
-        <a href="https://docs.google.com/spreadsheets/d/${SHEET_ID}" target="_blank"
-          style="padding:6px 14px;border-radius:8px;border:1.5px solid #92400e;background:transparent;color:#92400e;font-size:.75rem;font-weight:700;text-decoration:none">
-          🔗 Open Sheet → File → Share → Publish to web → CSV
-        </a>
-        <button onclick="syncSheet(true)" 
-          style="padding:6px 14px;border-radius:8px;border:1.5px solid #92400e;background:transparent;color:#92400e;font-size:.75rem;font-weight:700;cursor:pointer">
-          ↻ Retry
-        </button>
+    <span class="sb-icon">⚠️</span>
+    <div class="sb-body">
+      <strong class="sb-title">Could not load Google Sheet automatically</strong>
+      <span class="sb-reason">Reason: ${errDetail || 'Network or permissions error'}</span>
+      <div class="sb-actions">
+        <button class="sb-btn" onclick="openAdminToSync()">📋 Paste CSV manually</button>
+        <a class="sb-btn" href="https://docs.google.com/spreadsheets/d/${SHEET_ID}" target="_blank">🔗 Open Sheet → Publish to web → CSV</a>
+        <button class="sb-btn" onclick="syncSheet(true)">↻ Retry</button>
       </div>
     </div>
-    <button onclick="hideSyncBanner()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:#92400e;flex-shrink:0">✕</button>
+    <button class="sb-close" onclick="hideSyncBanner()">✕</button>
   `;
 }
 function hideSyncBanner() {
@@ -833,6 +857,11 @@ function renderGrid(list) {
   const g = document.getElementById('grid');
   if (!list.length) { g.innerHTML = `<div class="empty"><h3>No Companies</h3><p>Add companies via Admin or publish your Google Sheet</p></div>`; return; }
   g.innerHTML = list.map((c,i) => cardHTML(c,i)).join('');
+  // Apply favicon cascade after DOM update
+  list.forEach(c => {
+    const el = document.getElementById(`fav-${c.id}`);
+    if (el) setFavWithFallback(el, c.url, c.name);
+  });
 }
 
 function cardHTML(c, i) {
@@ -841,7 +870,7 @@ function cardHTML(c, i) {
   const btx = ct.scraped ? 'fetched' : ct.loading ? 'scanning…' : 'pending';
   return `<div class="ccard" style="animation-delay:${i*.035}s" id="cc-${c.id}" onclick="openModal('${c.id}')">
     <div class="ctop">
-      <img class="cfav" src="${fav(c.url)}" alt="${c.name}" onerror="this.src='${fav('')}'">
+      <img class="cfav" id="fav-${c.id}" src="" alt="${c.name}">
       <div class="cbadge ${bc}"><div class="bdot"></div>${btx}</div>
     </div>
     <div class="cname">${c.name}</div>
@@ -870,7 +899,7 @@ function filterGrid() {
 function openModal(id) {
   const c = companies.find(x => x.id===id); if (!c) return;
   openModalId = id;
-  const fv = document.getElementById('mFav'); fv.src=fav(c.url); fv.onerror=()=>fv.src=fav('');
+  const fv = document.getElementById('mFav'); setFavWithFallback(fv, c.url, c.name);
   document.getElementById('mName').textContent = c.name;
   const ua = document.getElementById('mUrl'); ua.href=c.url||'#'; ua.textContent=c.url?dom(c.url):'No website';
   renderModal(c);
@@ -1071,12 +1100,19 @@ function renderAlist() {
   if (!companies.length) { el.innerHTML=`<div style="padding:20px;text-align:center;font-size:.8rem;font-weight:500;color:var(--ink4)">No companies yet</div>`; return; }
   el.innerHTML = companies.map(c=>`<div class="ali">
     <div class="ali-l">
-      <img src="${fav(c.url)}" alt="" onerror="this.style.display='none'">
+      <img id="ali-fav-${c.id}" src="" alt="" style="width:22px;height:22px;border-radius:5px;object-fit:contain">
       <span class="ali-n">${c.name}</span>
       ${c.offering?`<span class="ali-off">· ${c.offering.substring(0,30)}${c.offering.length>30?'…':''}</span>`:''}
     </div>
     <button class="ali-del" onclick="delCo('${c.id}')">✕</button>
   </div>`).join('');
+  // Apply favicon cascade to admin list images
+  setTimeout(() => {
+    companies.forEach(c => {
+      const img = document.getElementById(`ali-fav-${c.id}`);
+      if (img) setFavWithFallback(img, c.url || '', c.name);
+    });
+  }, 30);
 }
 
 function addCo(doFetch=true) {
@@ -1171,8 +1207,59 @@ function goHome() {
 }
 function uid()  { return Math.random().toString(36).slice(2,10); }
 function norm(u){ if(!u)return''; u=u.trim(); if(!u.startsWith('http'))u='https://'+u; return u.replace(/\/$/,''); }
-function dom(u) { try{return new URL(u).hostname.replace('www.','');}catch(e){return u;} }
-function fav(u) { const d=u?dom(u):'example.com'; return `https://www.google.com/s2/favicons?domain=${d}&sz=128`; }
+// dom() defined in setFavWithFallback block above
+/* ── FAVICON / LOGO helpers ── */
+// dom() defined in setFavWithFallback block above
+
+// Returns the best logo URL to try first (Clearbit gives real logos, not just tiny icons)
+function fav(u) {
+  const d = u ? dom(u) : null;
+  if (!d || d === 'example.com') return '';
+  return `https://logo.clearbit.com/${d}`;
+}
+
+// Chain: Clearbit → DuckDuckGo → letter avatar
+function setFavWithFallback(imgEl, url, name) {
+  const d = url ? dom(url) : null;
+  const letter = name ? name.trim()[0].toUpperCase() : '?';
+
+  // Generate a letter-avatar data URI
+  function letterAvatar(ch) {
+    const colors = ['#3b82f6','#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#14b8a6','#f97316'];
+    const color = colors[ch.charCodeAt(0) % colors.length];
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+      <rect width="128" height="128" rx="20" fill="${color}"/>
+      <text x="64" y="82" font-family="Inter,Arial,sans-serif" font-size="60" font-weight="700"
+        fill="white" text-anchor="middle">${ch}</text>
+    </svg>`;
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+
+  if (!d) { imgEl.src = letterAvatar(letter); return; }
+
+  // Stage 1: Clearbit
+  imgEl.src = `https://logo.clearbit.com/${d}`;
+  imgEl._stage = 1;
+  imgEl._fallbackDomain = d;
+  imgEl._fallbackLetter = letter;
+  imgEl._letterAvatar = letterAvatar;
+  imgEl.onerror = function() {
+    if (this._stage === 1) {
+      // Stage 2: DuckDuckGo
+      this._stage = 2;
+      this.src = `https://icons.duckduckgo.com/ip3/${this._fallbackDomain}.ico`;
+    } else if (this._stage === 2) {
+      // Stage 3: Google (last resort)
+      this._stage = 3;
+      this.src = `https://www.google.com/s2/favicons?domain=${this._fallbackDomain}&sz=64`;
+    } else {
+      // Final: letter avatar
+      this._stage = 4;
+      this.onerror = null;
+      this.src = this._letterAvatar(this._fallbackLetter);
+    }
+  };
+}
 function toast(msg,type='ok') {
   const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg;
   document.getElementById('tcon').appendChild(el);
