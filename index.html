@@ -945,28 +945,48 @@ const CONTACT_SLUGS = [
   '/help', '/enquiry', '/enquire', '/about-us',
 ];
 
-const CORS_PROXIES = [
-  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-];
-
+/* proxyFetch — races all 3 proxies simultaneously, returns whichever wins first.
+   Max wait: 7s total instead of 9s per proxy sequentially. */
 async function proxyFetch(url) {
-  for (const proxy of CORS_PROXIES) {
-    try {
-      const r = await fetch(proxy(url), { signal: AbortSignal.timeout(9000) });
-      if (!r.ok) continue;
-      const data = await r.json().catch(() => null);
-      // allorigins wraps in { contents: "..." }
-      if (data && data.contents) return data.contents;
-      // others return raw text — but .json() failed, try .text() via second fetch
-      const r2 = await fetch(proxy(url), { signal: AbortSignal.timeout(9000) });
-      const txt = await r2.text();
-      if (txt && txt.length > 200 && !txt.trim().startsWith('{')) return txt;
-      if (txt && txt.length > 200) return txt;
-    } catch(e) { /* try next proxy */ }
+  const TIMEOUT = 7000;
+
+  // Each proxy attempt: resolves with HTML string or rejects
+  function tryProxy(proxyUrl, isWrapped) {
+    return new Promise(async (resolve, reject) => {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => { ctrl.abort(); reject('timeout'); }, TIMEOUT);
+      try {
+        const r = await fetch(proxyUrl, { signal: ctrl.signal });
+        clearTimeout(t);
+        if (!r.ok) { reject(r.status); return; }
+        if (isWrapped) {
+          // allorigins returns { contents: "html..." }
+          const j = await r.json();
+          const html = j?.contents;
+          if (html && html.length > 200) resolve(html);
+          else reject('empty');
+        } else {
+          const txt = await r.text();
+          if (txt && txt.length > 200) resolve(txt);
+          else reject('empty');
+        }
+      } catch(e) { clearTimeout(t); reject(e); }
+    });
   }
-  return null;
+
+  const enc = encodeURIComponent(url);
+  const races = [
+    tryProxy(`https://api.allorigins.win/get?url=${enc}`, true),
+    tryProxy(`https://corsproxy.io/?${enc}`, false),
+    tryProxy(`https://api.codetabs.com/v1/proxy?quest=${enc}`, false),
+  ];
+
+  // Promise.any — first success wins; if all fail, return null
+  try {
+    return await Promise.any(races);
+  } catch(_) {
+    return null;
+  }
 }
 
 function extractFromHtml(html, result) {
@@ -1101,31 +1121,35 @@ async function fetchContact(id) {
       toast(`Scanning ${c.name}…`, 'ok');
     }
 
-    // 1. Fetch homepage
-    const homeHtml = await proxyFetch(siteUrl);
-    extractFromHtml(homeHtml, result);
+    // 1. Fetch homepage + /contact page simultaneously — don't wait for one before starting the other
+    const base = siteUrl.replace(/\/$/, '');
+    const contactUrl = base + '/contact';
+    const contactUsUrl = base + '/contact-us';
 
-    // 2. Find & fetch contact page link from homepage
-    if (homeHtml && (!result.email || !result.phone)) {
-      const cLink = findContactLink(homeHtml, siteUrl);
-      if (cLink && cLink !== siteUrl) {
-        result.contactPage = cLink;
-        const cHtml = await proxyFetch(cLink);
-        extractFromHtml(cHtml, result);
-      }
+    const [homeHtml, contactHtml, contactUsHtml] = await Promise.all([
+      proxyFetch(siteUrl),
+      proxyFetch(contactUrl),
+      proxyFetch(contactUsUrl),
+    ]);
+
+    // Extract from all pages — earlier pages take precedence (won't overwrite found values)
+    extractFromHtml(homeHtml, result);
+    extractFromHtml(contactHtml, result);
+    extractFromHtml(contactUsHtml, result);
+
+    // Set contact page URL to whichever returned data
+    if (!result.contactPage) {
+      if (contactHtml && contactHtml.length > 500)   result.contactPage = contactUrl;
+      else if (contactUsHtml && contactUsHtml.length > 500) result.contactPage = contactUsUrl;
     }
 
-    // 3. Try common slugs if still missing data
-    if (!result.email || !result.phone) {
-      for (const slug of CONTACT_SLUGS) {
-        if (result.email && result.phone) break;
-        const tryUrl = siteUrl.replace(/\/$/, '') + slug;
-        if (tryUrl === result.contactPage) continue;
-        const html = await proxyFetch(tryUrl);
-        if (html && html.length > 500) {
-          extractFromHtml(html, result);
-          if (!result.contactPage) result.contactPage = tryUrl;
-        }
+    // 2. If still no email/phone, check the contact link found in homepage HTML
+    if (homeHtml && !result.email && !result.phone) {
+      const discovered = findContactLink(homeHtml, siteUrl);
+      if (discovered && discovered !== contactUrl && discovered !== contactUsUrl) {
+        result.contactPage = discovered;
+        const dHtml = await proxyFetch(discovered);
+        extractFromHtml(dHtml, result);
       }
     }
 
@@ -1135,15 +1159,29 @@ async function fetchContact(id) {
     ].filter(Boolean).join(' | ') || null;
 
     const scraped = !!(result.email || result.phone || result.contactPage);
-    cache[id] = { email: result.email, phone: result.phone, contactPage: result.contactPage, other, loading: false, scraped, fetchedAt: Date.now() };
+    // ── Persist: merge with any existing good data rather than overwriting ──
+    const existing = cache[id] || {};
+    cache[id] = {
+      email:       result.email       || existing.email       || null,
+      phone:       result.phone       || existing.phone       || null,
+      contactPage: result.contactPage || existing.contactPage || null,
+      other:       other              || existing.other       || null,
+      loading: false,
+      scraped: scraped || !!existing.scraped,
+      fetchedAt: Date.now(),
+    };
     saveStore();
 
     if (scraped) toast(`✓ Contacts found for ${c.name}`, 'ok');
-    else toast(`${c.name} — no contacts found (site may block bots)`, 'err');
+    else toast(`${c.name} — nothing found (site may block scrapers)`, 'err');
 
   } catch(e) {
-    cache[id] = { loading: false, scraped: false };
-    toast(`Error scraping ${c.name}: ${e.message}`, 'err');
+    // ── Persistence fix: on error, preserve any previously fetched data ──
+    const prev = cache[id] || {};
+    cache[id] = { ...prev, loading: false };
+    if (!prev.scraped) cache[id].scraped = false;
+    saveStore();
+    toast(`${c.name}: ${e.message}`, 'err');
   }
 
   updateStats();
