@@ -875,7 +875,12 @@ function cardHTML(c, i) {
     </div>
     <div class="cname">${c.name}</div>
     ${c.offering ? `<span class="coffering" title="${c.offering}">${c.offering}</span>` : ''}
-    ${c.url ? `<a class="curl" href="${c.url}" target="_blank" onclick="event.stopPropagation()">↗ ${dom(c.url)}</a>` : `<span class="curl" style="color:var(--ink4)">No website on file</span>`}
+    ${c.url
+      ? `<a class="curl" href="${c.url}" target="_blank" onclick="event.stopPropagation()">↗ ${dom(c.url)}</a>`
+      : (cache[c.id]?.loading
+          ? `<span class="curl" style="color:var(--ink4)">Discovering website…</span>`
+          : `<span class="curl" style="color:var(--ink4)">Website will be found on fetch</span>`)
+    }
     <div class="cinfos">
       <div class="ci ${ct.email?'has':''}"><span class="ico">✉</span><span>${ct.email||'Email not yet fetched'}</span></div>
       <div class="ci ${ct.phone?'has':''}"><span class="ico">☎</span><span>${ct.phone||'Phone not yet fetched'}</span></div>
@@ -1228,10 +1233,11 @@ function renderAdminBody() {
     <div class="atab-c active" id="atab-add">
       <label class="flabel">Company Name *</label>
       <input type="text" class="finput" id="newName" placeholder="e.g. Infosys" onkeydown="if(event.key==='Enter')document.getElementById('newOff').focus()">
-      <label class="flabel">Primary Offerings (Column C)</label>
-      <input type="text" class="finput" id="newOff" placeholder="e.g. IT consulting, BPO services" onkeydown="if(event.key==='Enter')document.getElementById('newUrl').focus()">
-      <label class="flabel">Website URL</label>
-      <input type="text" class="finput" id="newUrl" placeholder="e.g. https://infosys.com" onkeydown="if(event.key==='Enter')addCo(true)">
+      <label class="flabel">Primary Offerings</label>
+      <input type="text" class="finput" id="newOff" placeholder="e.g. IT consulting, BPO services" onkeydown="if(event.key==='Enter')addCo(true)">
+      <div style="font-size:.72rem;color:var(--ink3);margin-bottom:12px;padding:9px 12px;background:var(--bg2);border-radius:var(--rs);border:1px solid var(--border)">
+        🔍 Website will be <strong>auto-discovered</strong> when you fetch contacts
+      </div>
       <div class="ferr" id="addErr"></div>
       <div class="fbtns">
         <button class="fbtn prime" onclick="addCo(true)">+ Add & Fetch Contacts</button>
@@ -1240,10 +1246,10 @@ function renderAdminBody() {
     </div>
     <div class="atab-c" id="atab-bulk">
       <div class="bulk-hint">
-        <strong>Paste one company per line.</strong> Each line can be:<br>
-        • Just a name: <code>Infosys</code><br>
-        • Name + URL: <code>Infosys, https://infosys.com</code><br>
-        • Name + URL + Offerings: <code>Infosys, https://infosys.com, IT consulting</code>
+        <strong>Paste one company per line.</strong> Just the name is enough — website is auto-discovered.<br>
+        • Name only: <code>DataRobot</code><br>
+        • Name + Offerings: <code>Infosys, IT consulting</code><br>
+        • Name + Offerings + URL (optional): <code>Wipro, Cloud &amp; BPO, https://wipro.com</code>
       </div>
       <label class="flabel">Company List</label>
       <textarea class="finput ftextarea" id="bulkInput" placeholder="Infosys, https://infosys.com, IT consulting&#10;Wipro, https://wipro.com, BPO &amp; Cloud&#10;TCS&#10;..."></textarea>
@@ -1322,17 +1328,17 @@ function renderAlist() {
 }
 
 function addCo(doFetch=true) {
-  const name    = document.getElementById('newName')?.value?.trim();
-  const offering= document.getElementById('newOff')?.value?.trim();
-  const url     = document.getElementById('newUrl')?.value?.trim();
-  const err     = document.getElementById('addErr');
+  const name     = document.getElementById('newName')?.value?.trim();
+  const offering = document.getElementById('newOff')?.value?.trim();
+  const err      = document.getElementById('addErr');
   if (!name) { err.textContent='Company name is required'; return; }
   if (companies.find(c=>c.name.toLowerCase()===name.toLowerCase())) { err.textContent='This company already exists'; return; }
   err.textContent='';
-  const c={id:uid(),name,url:norm(url),offering,addedAt:Date.now()};
+  // No URL — will be discovered automatically during fetch
+  const c = { id: uid(), name, url: '', offering, addedAt: Date.now() };
   companies.push(c); saveStore(); renderAll(); closeAdmin();
-  toast(`${name} added`,'ok');
-  if (doFetch && (c.url||c.name)) setTimeout(()=>fetchContact(c.id),600);
+  toast(`${name} added`, 'ok');
+  if (doFetch) setTimeout(() => fetchContact(c.id), 600);
 }
 
 function doBulkImport(doFetch=true) {
@@ -1345,11 +1351,15 @@ function doBulkImport(doFetch=true) {
   const seenInPaste = new Set(); // catches duplicates within the pasted list itself
 
   lines.forEach(line => {
-    const parts    = line.split(',').map(p=>p.trim());
-    const name     = parts[0];
-    const urlRaw   = parts[1] || '';
-    const offering = parts[2] || '';
+    const parts = line.split(',').map(p=>p.trim());
+    const name  = parts[0];
     if (!name) return;
+    // Detect: if parts[1] looks like a URL use it, otherwise it's an offering
+    const p1 = parts[1] || '';
+    const p2 = parts[2] || '';
+    const hasUrl = p1.startsWith('http') || p1.startsWith('www.');
+    const urlRaw   = hasUrl ? p1 : '';
+    const offering = hasUrl ? p2 : p1;
 
     const key = name.toLowerCase();
 
