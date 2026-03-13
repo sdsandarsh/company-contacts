@@ -696,6 +696,14 @@ function doUnlock() {
     if (v === ADMIN_PW) { isAdmin = true; document.getElementById('adminBtn').classList.add('on'); }
     document.getElementById('lockScreen').style.display = 'none';
     loadStore(); renderAll(); syncSheet();
+    // Warn if no API key set
+    if (!getApiKey()) {
+      setTimeout(() => {
+        toast('⚠ No API key set — open Admin → ⚙ API Key to add your Anthropic key', 'err');
+        document.getElementById('adminBtn').style.outline = '2px solid var(--amber)';
+        document.getElementById('adminBtn').title = 'API key missing — click to set';
+      }, 1200);
+    }
   } else {
     document.getElementById('lockErr').textContent = 'Incorrect password — please try again.';
     document.getElementById('lockPw').value = '';
@@ -954,38 +962,65 @@ async function fetchContact(id) {
   if(openModalId===id) renderModal(c);
 }
 
+/* ── API KEY storage ── */
+function getApiKey() { return localStorage.getItem('cc_apikey') || ''; }
+function setApiKey(k) { localStorage.setItem('cc_apikey', k.trim()); }
+
 async function callClaude(name, url, offering) {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('No API key set — open Admin → Settings and paste your Anthropic API key');
+
   const context = offering ? `The company specialises in: ${offering}.` : '';
   const urlHint = url ? `Their website is ${url}.` : `Search for the company's official website.`;
+
   const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',  // required for browser CORS
+    },
     body: JSON.stringify({
-      model: MODEL, max_tokens: 1024,
-      tools: [{ type:'web_search_20250305', name:'web_search' }],
+      model: MODEL,
+      max_tokens: 1024,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
       messages: [{
-        role:'user',
+        role: 'user',
         content: `You are a B2B contact information extractor. The company is "${name}". ${urlHint} ${context}
 
-Please search the web and visit their website to find:
-1. Official email address — check Contact Us page, footer, mailto: links, and About page
-2. Phone number — check tel: links, footer, and Contact page
-3. Direct URL of their "Contact Us" or enquiry form page
-4. One concise sentence describing what the company does (informed by their offerings: ${offering||'general'})
+Search the web and find:
+1. Official email address (contact page, footer, mailto links)
+2. Phone number (tel links, footer, contact page)
+3. Direct URL of their Contact Us or enquiry form page
+4. One sentence describing what the company does
 
-Return ONLY this JSON object, no markdown, no explanation:
+Return ONLY valid JSON, no markdown:
 {"email":null,"phone":null,"contactPage":null,"description":null,"other":null}
 
-For "other", include LinkedIn company page URL or Twitter/X handle if found. Use null for any missing field.`
+"other" = LinkedIn/Twitter URL if found. Use null for missing fields.`
       }]
     })
   });
-  if (!r.ok) { const e=await r.json().catch(()=>({})); throw new Error(e.error?.message||`API error ${r.status}`); }
+
+  if (!r.ok) {
+    let msg = `API error ${r.status}`;
+    try {
+      const e = await r.json();
+      msg = e.error?.message || msg;
+      if (r.status === 401) msg = 'Invalid API key — check Admin → Settings';
+      if (r.status === 403) msg = 'API key lacks permission — ensure web search is enabled';
+    } catch(_) {}
+    throw new Error(msg);
+  }
+
   const d = await r.json();
-  const txt = (d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-  const m = txt.match(/\{[\s\S]*?\}/); if (!m) throw new Error('No JSON in response');
+  const txt = (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+  const m = txt.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('Could not parse response — try again');
   const p = JSON.parse(m[0]);
-  const cl = v => v && v!=='null' ? v : null;
-  return { email:cl(p.email), phone:cl(p.phone), contactPage:cl(p.contactPage), description:cl(p.description), other:cl(p.other) };
+  const cl = v => (v && v !== 'null' && v !== 'N/A' && v !== 'n/a') ? v.trim() : null;
+  return { email: cl(p.email), phone: cl(p.phone), contactPage: cl(p.contactPage), description: cl(p.description), other: cl(p.other) };
 }
 
 /* ── ADMIN ── */
@@ -1018,7 +1053,8 @@ function renderAdminBody() {
       <button class="atab active" onclick="swTab('add',this)">Add One</button>
       <button class="atab" onclick="swTab('bulk',this)">Bulk Import</button>
       <button class="atab" onclick="swTab('manage',this)">Manage (${companies.length})</button>
-      <button class="atab" onclick="swTab('sync',this)">Sync / Import</button>
+      <button class="atab" onclick="swTab('sync',this)">Sync</button>
+      <button class="atab" onclick="swTab('settings',this)">⚙ API Key</button>
     </div>
     <div class="atab-c active" id="atab-add">
       <label class="flabel">Company Name *</label>
@@ -1075,10 +1111,85 @@ function renderAdminBody() {
       <div class="fbtns">
         <button class="fbtn prime" onclick="importPastedCSV()">⊕ Import Pasted Data</button>
       </div>
+    </div>
+    <div class="atab-c" id="atab-settings">
+      <div class="snote">
+        Your API key is stored only in <strong>your browser</strong> (localStorage) and sent directly to <strong>api.anthropic.com</strong> — never anywhere else.<br><br>
+        Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--blue)">console.anthropic.com → API Keys</a>. Your account must have API access enabled.
+      </div>
+      <label class="flabel">Anthropic API Key</label>
+      <input type="password" class="finput" id="apiKeyInput" placeholder="sk-ant-api03-...">
+      <div class="ferr" id="apiKeyErr"></div>
+      <div class="fbtns">
+        <button class="fbtn prime" onclick="saveApiKey()">💾 Save Key</button>
+        <button class="fbtn" onclick="testApiKey()">🧪 Test Connection</button>
+        <button class="fbtn danger" onclick="clearApiKey()">✕ Remove Key</button>
+      </div>
+      <div id="apiKeyStatus" style="margin-top:12px;font-size:.76rem;font-weight:600;color:var(--green);min-height:18px"></div>
     </div>`;
     renderAlist();
+    // Pre-fill API key field if saved
+    const akEl = document.getElementById('apiKeyInput');
+    if (akEl) akEl.value = getApiKey();
     setTimeout(()=>document.getElementById('newName')?.focus(),80);
   }
+}
+
+function saveApiKey() {
+  const v = document.getElementById('apiKeyInput')?.value?.trim();
+  if (!v) { document.getElementById('apiKeyErr').textContent = 'Please paste your API key'; return; }
+  if (!v.startsWith('sk-ant')) { document.getElementById('apiKeyErr').textContent = 'Key should start with sk-ant...'; return; }
+  setApiKey(v);
+  document.getElementById('apiKeyErr').textContent = '';
+  document.getElementById('apiKeyStatus').textContent = '✓ Key saved successfully';
+  document.getElementById('apiKeyStatus').style.color = 'var(--green)';
+  toast('API key saved', 'ok');
+  const btn = document.getElementById('adminBtn');
+  if (btn) { btn.style.outline = ''; btn.title = ''; }
+}
+
+async function testApiKey() {
+  const v = document.getElementById('apiKeyInput')?.value?.trim() || getApiKey();
+  if (!v) { document.getElementById('apiKeyErr').textContent = 'No API key to test'; return; }
+  const statusEl = document.getElementById('apiKeyStatus');
+  statusEl.textContent = 'Testing…'; statusEl.style.color = 'var(--ink3)';
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': v,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: MODEL, max_tokens: 10,
+        messages: [{ role: 'user', content: 'Say OK' }]
+      })
+    });
+    if (r.ok) {
+      statusEl.textContent = '✓ Connection successful — API key works!';
+      statusEl.style.color = 'var(--green)';
+      setApiKey(v);
+      document.getElementById('apiKeyErr').textContent = '';
+    } else {
+      const e = await r.json().catch(()=>({}));
+      statusEl.textContent = '✗ ' + (e.error?.message || `Error ${r.status}`);
+      statusEl.style.color = 'var(--red)';
+    }
+  } catch(e) {
+    statusEl.textContent = '✗ Network error: ' + e.message;
+    statusEl.style.color = 'var(--red)';
+  }
+}
+
+function clearApiKey() {
+  localStorage.removeItem('cc_apikey');
+  const akEl = document.getElementById('apiKeyInput');
+  if (akEl) akEl.value = '';
+  document.getElementById('apiKeyStatus').textContent = 'Key removed';
+  document.getElementById('apiKeyStatus').style.color = 'var(--ink3)';
+  toast('API key removed', 'ok');
 }
 
 function doAdminLogin() {
@@ -1207,58 +1318,46 @@ function goHome() {
 }
 function uid()  { return Math.random().toString(36).slice(2,10); }
 function norm(u){ if(!u)return''; u=u.trim(); if(!u.startsWith('http'))u='https://'+u; return u.replace(/\/$/,''); }
-// dom() defined in setFavWithFallback block above
 /* ── FAVICON / LOGO helpers ── */
-// dom() defined in setFavWithFallback block above
+function dom(u) { try{return new URL(u).hostname.replace(/^www\./,'');}catch(e){return u||'';} }
 
-// Returns the best logo URL to try first (Clearbit gives real logos, not just tiny icons)
-function fav(u) {
-  const d = u ? dom(u) : null;
-  if (!d || d === 'example.com') return '';
-  return `https://logo.clearbit.com/${d}`;
-}
-
-// Chain: Clearbit → DuckDuckGo → letter avatar
+/* setFavWithFallback
+   Chain: Google faviconV2 (128px) → icon.horse → favicon.im → Google s2 → letter avatar
+   Note: Clearbit logo.clearbit.com was shut down — do NOT use it */
 function setFavWithFallback(imgEl, url, name) {
-  const d = url ? dom(url) : null;
-  const letter = name ? name.trim()[0].toUpperCase() : '?';
+  const d = (url && url.trim()) ? dom(url.trim()) : null;
+  const letter = ((name||'?').trim()[0]||'?').toUpperCase();
 
-  // Generate a letter-avatar data URI
   function letterAvatar(ch) {
-    const colors = ['#3b82f6','#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#14b8a6','#f97316'];
-    const color = colors[ch.charCodeAt(0) % colors.length];
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-      <rect width="128" height="128" rx="20" fill="${color}"/>
-      <text x="64" y="82" font-family="Inter,Arial,sans-serif" font-size="60" font-weight="700"
-        fill="white" text-anchor="middle">${ch}</text>
-    </svg>`;
+    const colors=['#3b82f6','#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#14b8a6','#f97316','#ef4444','#0ea5e9'];
+    const bg = colors[ch.charCodeAt(0) % colors.length];
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" rx="24" fill="${bg}"/><text x="64" y="86" font-family="Inter,system-ui,sans-serif" font-size="64" font-weight="800" fill="white" text-anchor="middle">${ch}</text></svg>`;
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
 
-  if (!d) { imgEl.src = letterAvatar(letter); return; }
+  if (!d) { imgEl.src = letterAvatar(letter); imgEl.onerror = null; return; }
 
-  // Stage 1: Clearbit
-  imgEl.src = `https://logo.clearbit.com/${d}`;
-  imgEl._stage = 1;
-  imgEl._fallbackDomain = d;
-  imgEl._fallbackLetter = letter;
-  imgEl._letterAvatar = letterAvatar;
+  const sources = [
+    `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${d}&size=128`,
+    `https://icon.horse/icon/${d}`,
+    `https://favicon.im/${d}?larger=true`,
+    `https://www.google.com/s2/favicons?domain=${d}&sz=64`,
+  ];
+
+  imgEl._si = 0;
+  imgEl._src = sources;
+  imgEl._ltr = letter;
+  imgEl._la  = letterAvatar;
   imgEl.onerror = function() {
-    if (this._stage === 1) {
-      // Stage 2: DuckDuckGo
-      this._stage = 2;
-      this.src = `https://icons.duckduckgo.com/ip3/${this._fallbackDomain}.ico`;
-    } else if (this._stage === 2) {
-      // Stage 3: Google (last resort)
-      this._stage = 3;
-      this.src = `https://www.google.com/s2/favicons?domain=${this._fallbackDomain}&sz=64`;
+    this._si++;
+    if (this._si < this._src.length) {
+      this.src = this._src[this._si];
     } else {
-      // Final: letter avatar
-      this._stage = 4;
       this.onerror = null;
-      this.src = this._letterAvatar(this._fallbackLetter);
+      this.src = this._la(this._ltr);
     }
   };
+  imgEl.src = sources[0];
 }
 function toast(msg,type='ok') {
   const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg;
