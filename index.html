@@ -628,7 +628,6 @@ const SHEET_URLS = [
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/pub?gid=0&single=true&output=csv`,
 ];
 const STORE_KEY = 'cc_v6';
-const MODEL     = 'claude-sonnet-4-20250514';
 
 let companies = [], cache = {}, isAdmin = false, openModalId = null;
 
@@ -696,14 +695,6 @@ function doUnlock() {
     if (v === ADMIN_PW) { isAdmin = true; document.getElementById('adminBtn').classList.add('on'); }
     document.getElementById('lockScreen').style.display = 'none';
     loadStore(); renderAll(); syncSheet();
-    // Warn if no API key set
-    if (!getApiKey()) {
-      setTimeout(() => {
-        toast('⚠ No API key set — open Admin → ⚙ API Key to add your Anthropic key', 'err');
-        document.getElementById('adminBtn').style.outline = '2px solid var(--amber)';
-        document.getElementById('adminBtn').title = 'API key missing — click to set';
-      }, 1200);
-    }
   } else {
     document.getElementById('lockErr').textContent = 'Incorrect password — please try again.';
     document.getElementById('lockPw').value = '';
@@ -941,86 +932,170 @@ function closeMod(e) {
 }
 
 /* ── CONTACT FETCH ── */
-async function fetchContact(id) {
-  const c = companies.find(x=>x.id===id); if (!c) return;
-  if (!c.url && !c.name) { toast('No website URL for this company','err'); return; }
-  if (!cache[id]) cache[id]={};
-  cache[id].loading=true; cache[id].scraped=false;
-  const el=document.getElementById(`cc-${id}`); if(el) el.outerHTML=cardHTML(c,0);
-  if(openModalId===id) renderModal(c);
-  toast(`Scanning ${c.name}…`,'ok');
-  try {
-    const res = await callClaude(c.name, c.url, c.offering);
-    cache[id]={...res,loading:false,scraped:true,fetchedAt:Date.now()};
-    saveStore(); toast(`Contacts fetched for ${c.name}`,'ok');
-  } catch(e) {
-    cache[id]={loading:false,scraped:false};
-    toast(e.message,'err');
+/* ═══════════════════════════════════════════════════════════
+   FREE SCRAPER — no API key, no cost
+   Uses free CORS proxies to fetch the company's own website,
+   then extracts emails, phones, contact links via regex.
+   Proxy chain: allorigins → corsproxy.io → codetabs
+═══════════════════════════════════════════════════════════ */
+
+const CONTACT_SLUGS = [
+  '/contact', '/contact-us', '/contactus', '/get-in-touch',
+  '/reach-us', '/connect', '/about/contact', '/support',
+  '/help', '/enquiry', '/enquire', '/about-us',
+];
+
+const CORS_PROXIES = [
+  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
+
+async function proxyFetch(url) {
+  for (const proxy of CORS_PROXIES) {
+    try {
+      const r = await fetch(proxy(url), { signal: AbortSignal.timeout(9000) });
+      if (!r.ok) continue;
+      const data = await r.json().catch(() => null);
+      // allorigins wraps in { contents: "..." }
+      if (data && data.contents) return data.contents;
+      // others return raw text — but .json() failed, try .text() via second fetch
+      const r2 = await fetch(proxy(url), { signal: AbortSignal.timeout(9000) });
+      const txt = await r2.text();
+      if (txt && txt.length > 200 && !txt.trim().startsWith('{')) return txt;
+      if (txt && txt.length > 200) return txt;
+    } catch(e) { /* try next proxy */ }
   }
-  updateStats();
-  const el2=document.getElementById(`cc-${id}`); if(el2) el2.outerHTML=cardHTML(c,0);
-  if(openModalId===id) renderModal(c);
+  return null;
 }
 
-/* ── API KEY storage ── */
-function getApiKey() { return localStorage.getItem('cc_apikey') || ''; }
-function setApiKey(k) { localStorage.setItem('cc_apikey', k.trim()); }
+function extractFromHtml(html, result) {
+  if (!html) return;
+  // Strip scripts/styles to reduce noise
+  const clean = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '');
 
-async function callClaude(name, url, offering) {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error('No API key set — open Admin → Settings and paste your Anthropic API key');
-
-  const context = offering ? `The company specialises in: ${offering}.` : '';
-  const urlHint = url ? `Their website is ${url}.` : `Search for the company's official website.`;
-
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',  // required for browser CORS
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 1024,
-      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-      messages: [{
-        role: 'user',
-        content: `You are a B2B contact information extractor. The company is "${name}". ${urlHint} ${context}
-
-Search the web and find:
-1. Official email address (contact page, footer, mailto links)
-2. Phone number (tel links, footer, contact page)
-3. Direct URL of their Contact Us or enquiry form page
-4. One sentence describing what the company does
-
-Return ONLY valid JSON, no markdown:
-{"email":null,"phone":null,"contactPage":null,"description":null,"other":null}
-
-"other" = LinkedIn/Twitter URL if found. Use null for missing fields.`
-      }]
-    })
-  });
-
-  if (!r.ok) {
-    let msg = `API error ${r.status}`;
-    try {
-      const e = await r.json();
-      msg = e.error?.message || msg;
-      if (r.status === 401) msg = 'Invalid API key — check Admin → Settings';
-      if (r.status === 403) msg = 'API key lacks permission — ensure web search is enabled';
-    } catch(_) {}
-    throw new Error(msg);
+  // Email — prefer mailto: links, then regex
+  if (!result.email) {
+    const mto = clean.match(/href=["']mailto:([^"'?\s&]+)/i);
+    if (mto) {
+      result.email = decodeURIComponent(mto[1]).toLowerCase().trim();
+    } else {
+      const em = clean.match(/\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b/);
+      if (em && !/\.(png|jpg|gif|svg|css|js)$/.test(em[1])) result.email = em[1].toLowerCase();
+    }
   }
 
-  const d = await r.json();
-  const txt = (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-  const m = txt.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('Could not parse response — try again');
-  const p = JSON.parse(m[0]);
-  const cl = v => (v && v !== 'null' && v !== 'N/A' && v !== 'n/a') ? v.trim() : null;
-  return { email: cl(p.email), phone: cl(p.phone), contactPage: cl(p.contactPage), description: cl(p.description), other: cl(p.other) };
+  // Phone — prefer tel: links
+  if (!result.phone) {
+    const tel = clean.match(/href=["']tel:([^"'\s]+)/i);
+    if (tel) {
+      result.phone = decodeURIComponent(tel[1]).trim();
+    } else {
+      const patterns = [
+        /(\+91[\s\-]?[6-9]\d{9})/,
+        /(\+91[\s\-]?\d{2,4}[\s\-]?\d{6,8})/,
+        /(\+1[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4})/,
+        /(\+\d{1,3}[\s\-]?\d{8,12})/,
+        /(\(?\d{3}\)?[\s\-\.]\d{3}[\s\-\.]\d{4})/,
+      ];
+      for (const p of patterns) {
+        const m = clean.match(p);
+        if (m) { result.phone = m[1].trim(); break; }
+      }
+    }
+  }
+
+  // Social links
+  if (!result.linkedin) {
+    const li = clean.match(/href=["'](https?:\/\/(?:www\.)?linkedin\.com\/company\/[^"'\s/][^"'\s]*)/i);
+    if (li) result.linkedin = li[1];
+  }
+  if (!result.twitter) {
+    const tw = clean.match(/href=["'](https?:\/\/(?:www\.)?(?:twitter|x)\.com\/[^"'\s/][^"'\s]*)/i);
+    if (tw) result.twitter = tw[1];
+  }
+}
+
+function findContactLink(html, baseUrl) {
+  if (!html) return null;
+  const re = /href=["']([^"']*(?:contact|reach|get-in-touch|enquir|support|connect)[^"']*)/gi;
+  for (const m of html.matchAll(re)) {
+    const h = m[1];
+    if (h.startsWith('http')) return h;
+    if (h.startsWith('/')) {
+      try { return new URL(h, baseUrl).href; } catch(_) {}
+    }
+  }
+  return null;
+}
+
+async function fetchContact(id) {
+  const c = companies.find(x => x.id === id); if (!c) return;
+  if (!c.url) { toast(`${c.name} has no website URL — add one in Admin`, 'err'); return; }
+
+  if (!cache[id]) cache[id] = {};
+  cache[id].loading = true; cache[id].scraped = false;
+  const el = document.getElementById(`cc-${id}`); if (el) el.outerHTML = cardHTML(c, 0);
+  if (openModalId === id) renderModal(c);
+  toast(`Scanning ${c.name}…`, 'ok');
+
+  const result = { email: null, phone: null, contactPage: null, linkedin: null, twitter: null };
+
+  try {
+    // 1. Fetch homepage
+    const homeHtml = await proxyFetch(c.url);
+    extractFromHtml(homeHtml, result);
+
+    // 2. Find & fetch contact page link from homepage
+    if (homeHtml && (!result.email || !result.phone)) {
+      const cLink = findContactLink(homeHtml, c.url);
+      if (cLink && cLink !== c.url) {
+        result.contactPage = cLink;
+        const cHtml = await proxyFetch(cLink);
+        extractFromHtml(cHtml, result);
+      }
+    }
+
+    // 3. Try common slugs if still missing data
+    if (!result.email || !result.phone) {
+      for (const slug of CONTACT_SLUGS) {
+        if (result.email && result.phone) break;
+        const tryUrl = c.url.replace(/\/$/, '') + slug;
+        if (tryUrl === result.contactPage) continue;
+        const html = await proxyFetch(tryUrl);
+        if (html && html.length > 500) {
+          extractFromHtml(html, result);
+          if (!result.contactPage) result.contactPage = tryUrl;
+        }
+      }
+    }
+
+    const other = [
+      result.linkedin ? 'LinkedIn: ' + result.linkedin : null,
+      result.twitter  ? 'Twitter/X: ' + result.twitter : null,
+    ].filter(Boolean).join(' | ') || null;
+
+    const scraped = !!(result.email || result.phone || result.contactPage);
+    cache[id] = { email: result.email, phone: result.phone, contactPage: result.contactPage, other, loading: false, scraped, fetchedAt: Date.now() };
+    saveStore();
+
+    if (scraped) toast(`✓ Contacts found for ${c.name}`, 'ok');
+    else toast(`${c.name} — no contacts found (site may block bots)`, 'err');
+
+  } catch(e) {
+    cache[id] = { loading: false, scraped: false };
+    toast(`Error scraping ${c.name}: ${e.message}`, 'err');
+  }
+
+  updateStats();
+  const el2 = document.getElementById(`cc-${id}`); if (el2) el2.outerHTML = cardHTML(c, 0);
+  if (openModalId === id) renderModal(c);
+  // Re-apply favicon after card re-render
+  const newImg = document.getElementById(`fav-${id}`);
+  if (newImg) setFavWithFallback(newImg, c.url, c.name);
 }
 
 /* ── ADMIN ── */
@@ -1054,7 +1129,6 @@ function renderAdminBody() {
       <button class="atab" onclick="swTab('bulk',this)">Bulk Import</button>
       <button class="atab" onclick="swTab('manage',this)">Manage (${companies.length})</button>
       <button class="atab" onclick="swTab('sync',this)">Sync</button>
-      <button class="atab" onclick="swTab('settings',this)">⚙ API Key</button>
     </div>
     <div class="atab-c active" id="atab-add">
       <label class="flabel">Company Name *</label>
@@ -1112,84 +1186,10 @@ function renderAdminBody() {
         <button class="fbtn prime" onclick="importPastedCSV()">⊕ Import Pasted Data</button>
       </div>
     </div>
-    <div class="atab-c" id="atab-settings">
-      <div class="snote">
-        Your API key is stored only in <strong>your browser</strong> (localStorage) and sent directly to <strong>api.anthropic.com</strong> — never anywhere else.<br><br>
-        Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--blue)">console.anthropic.com → API Keys</a>. Your account must have API access enabled.
-      </div>
-      <label class="flabel">Anthropic API Key</label>
-      <input type="password" class="finput" id="apiKeyInput" placeholder="sk-ant-api03-...">
-      <div class="ferr" id="apiKeyErr"></div>
-      <div class="fbtns">
-        <button class="fbtn prime" onclick="saveApiKey()">💾 Save Key</button>
-        <button class="fbtn" onclick="testApiKey()">🧪 Test Connection</button>
-        <button class="fbtn danger" onclick="clearApiKey()">✕ Remove Key</button>
-      </div>
-      <div id="apiKeyStatus" style="margin-top:12px;font-size:.76rem;font-weight:600;color:var(--green);min-height:18px"></div>
-    </div>`;
+`;
     renderAlist();
-    // Pre-fill API key field if saved
-    const akEl = document.getElementById('apiKeyInput');
-    if (akEl) akEl.value = getApiKey();
     setTimeout(()=>document.getElementById('newName')?.focus(),80);
   }
-}
-
-function saveApiKey() {
-  const v = document.getElementById('apiKeyInput')?.value?.trim();
-  if (!v) { document.getElementById('apiKeyErr').textContent = 'Please paste your API key'; return; }
-  if (!v.startsWith('sk-ant')) { document.getElementById('apiKeyErr').textContent = 'Key should start with sk-ant...'; return; }
-  setApiKey(v);
-  document.getElementById('apiKeyErr').textContent = '';
-  document.getElementById('apiKeyStatus').textContent = '✓ Key saved successfully';
-  document.getElementById('apiKeyStatus').style.color = 'var(--green)';
-  toast('API key saved', 'ok');
-  const btn = document.getElementById('adminBtn');
-  if (btn) { btn.style.outline = ''; btn.title = ''; }
-}
-
-async function testApiKey() {
-  const v = document.getElementById('apiKeyInput')?.value?.trim() || getApiKey();
-  if (!v) { document.getElementById('apiKeyErr').textContent = 'No API key to test'; return; }
-  const statusEl = document.getElementById('apiKeyStatus');
-  statusEl.textContent = 'Testing…'; statusEl.style.color = 'var(--ink3)';
-  try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': v,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: MODEL, max_tokens: 10,
-        messages: [{ role: 'user', content: 'Say OK' }]
-      })
-    });
-    if (r.ok) {
-      statusEl.textContent = '✓ Connection successful — API key works!';
-      statusEl.style.color = 'var(--green)';
-      setApiKey(v);
-      document.getElementById('apiKeyErr').textContent = '';
-    } else {
-      const e = await r.json().catch(()=>({}));
-      statusEl.textContent = '✗ ' + (e.error?.message || `Error ${r.status}`);
-      statusEl.style.color = 'var(--red)';
-    }
-  } catch(e) {
-    statusEl.textContent = '✗ Network error: ' + e.message;
-    statusEl.style.color = 'var(--red)';
-  }
-}
-
-function clearApiKey() {
-  localStorage.removeItem('cc_apikey');
-  const akEl = document.getElementById('apiKeyInput');
-  if (akEl) akEl.value = '';
-  document.getElementById('apiKeyStatus').textContent = 'Key removed';
-  document.getElementById('apiKeyStatus').style.color = 'var(--ink3)';
-  toast('API key removed', 'ok');
 }
 
 function doAdminLogin() {
