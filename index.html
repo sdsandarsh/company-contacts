@@ -693,6 +693,10 @@ const SHEET_URLS = [
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/pub?gid=0&single=true&output=csv`,
 ];
 const STORE_KEY = 'cc_v6';
+// ── Google Apps Script Web App URL (for writing back to sheet) ──
+// Deploy your Apps Script as a web app and paste the URL in Admin → 🔑 API Keys
+// Leave empty to disable sheet write-back (app still works fine without it)
+let GAS_WEBAPP_URL = localStorage.getItem('cc_gas_url') || '';
 
 let companies = [], cache = {}, isAdmin = false, openModalId = null;
 
@@ -771,10 +775,57 @@ function doUnlock() {
 
 /* ── STORAGE ── */
 function loadStore() {
-  try { const d = JSON.parse(localStorage.getItem(STORE_KEY)||'{}'); companies=d.companies||[]; cache=d.cache||{}; } catch(e){}
+  try {
+    const d = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    companies = d.companies || [];
+    cache     = d.cache     || {};
+  } catch(e) { companies = []; cache = {}; }
 }
+
+/* saveStore — slims HR contact data before saving to stay under localStorage 5MB limit.
+   Full data lives in memory (cache); only essentials are persisted. */
 function saveStore() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify({companies, cache})); } catch(e){}
+  try {
+    // Slim each cache entry — keep all useful fields but cap hrContacts at 6 and trim linkedin/other to save space
+    const slimCache = {};
+    for (const [id, ct] of Object.entries(cache)) {
+      if (!ct || ct.loading) continue;  // never persist loading state
+      slimCache[id] = {
+        email:         ct.email         || null,
+        phone:         ct.phone         || null,
+        contactPage:   ct.contactPage   || null,
+        careersPage:   ct.careersPage   || null,
+        emailPattern:  ct.emailPattern  || null,
+        linkedinSearch:ct.linkedinSearch|| null,
+        other:         ct.other         || null,
+        usedApollo:    ct.usedApollo    || false,
+        scraped:       ct.scraped       || false,
+        fetchedAt:     ct.fetchedAt     || null,
+        fromSheet:     ct.fromSheet     || false,
+        // Slim HR contacts — keep max 6, drop heavy fields on overflow
+        hrContacts: (ct.hrContacts || []).slice(0, 6).map(p => ({
+          name:      p.name      || '',
+          role:      p.role      || '',
+          email:     p.email     || null,
+          phone:     p.phone     || null,
+          linkedin:  p.linkedin  || null,
+          source:    p.source    || '',
+          predicted: p.predicted || false,
+        })),
+      };
+    }
+    const payload = JSON.stringify({ companies, cache: slimCache });
+    localStorage.setItem(STORE_KEY, payload);
+  } catch(e) {
+    if (e.name === 'QuotaExceededError' || e.code === 22) {
+      // Storage full — save companies only, drop cache (contacts stay in memory this session)
+      try {
+        localStorage.setItem(STORE_KEY, JSON.stringify({ companies, cache: {} }));
+        console.warn('Storage full: company list saved but contact cache cleared. Re-fetch will restore.');
+        toast('⚠ Storage limit reached — company list saved, some contact data may need re-fetching', 'err');
+      } catch(_) { /* truly full — nothing we can do */ }
+    }
+  }
 }
 
 /* ── SHEET SYNC ── */
@@ -905,6 +956,63 @@ function csvSplit(line) {
   const r=[]; let cur='',q=false;
   for (const ch of line) { if(ch==='"'){q=!q;}else if(ch===','&&!q){r.push(cur);cur='';}else{cur+=ch;} }
   r.push(cur); return r;
+}
+
+/* ── WRITE BACK TO GOOGLE SHEET ── */
+/* Calls the deployed Apps Script web app to update a row in the sheet.
+   Works silently in background — failure never blocks the UI. */
+async function writeBackToSheet(c) {
+  const url = GAS_WEBAPP_URL;
+  if (!url) return; // not configured — skip silently
+  const ct = cache[c.id] || {};
+  try {
+    const topHR = (ct.hrContacts||[])[0];
+    const payload = {
+      name:        c.name,
+      email:       ct.email       || (topHR?.email || ''),
+      phone:       ct.phone       || (topHR?.phone || ''),
+      contactPage: ct.contactPage || '',
+      careersPage: ct.careersPage || '',
+      hrNames:     (ct.hrContacts||[]).map(p=>p.name).join(', '),
+      hrEmails:    (ct.hrContacts||[]).map(p=>p.email).filter(Boolean).join(', '),
+      other:       ct.other       || '',
+    };
+    await fetch(url + '?action=update', {
+      method: 'POST',
+      mode:   'no-cors',  // Apps Script web app handles CORS; no-cors avoids preflight
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch(e) {
+    console.warn('Sheet write-back failed (non-critical):', e.message);
+  }
+}
+
+/* exportContactsCSV — lets user download all fetched data as CSV to paste into sheet */
+function exportContactsCSV() {
+  const rows = [['S.No','Company Name','Primary Offerings','Email','Phone','HR Names','HR Emails','Careers Page','Contact Page','Other']];
+  companies.forEach((c, i) => {
+    const ct = cache[c.id] || {};
+    rows.push([
+      i+1,
+      c.name,
+      c.offering || '',
+      ct.email || '',
+      ct.phone  || '',
+      (ct.hrContacts||[]).map(p=>p.name).join(' | '),
+      (ct.hrContacts||[]).map(p=>p.email).filter(Boolean).join(' | '),
+      ct.careersPage  || '',
+      ct.contactPage  || '',
+      ct.other        || '',
+    ]);
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('
+');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'company-contacts-export.csv';
+  a.click();
+  toast('✓ CSV downloaded — open your Google Sheet and paste into cell A1', 'ok');
 }
 
 /* ── RENDER ── */
@@ -1564,6 +1672,8 @@ async function fetchContact(id) {
     const src = apolloContacts?.length ? '(via Apollo)' : '(website scan)';
     if (scraped) toast(`✓ ${c.name} — ${hrCount} HR contact${hrCount!==1?'s':''} found ${src}`, 'ok');
     else toast(`${c.name} — nothing found. Site may block scrapers.`, 'err');
+    // Write back to Google Sheet in background (silently, non-blocking)
+    writeBackToSheet(c);
 
   } catch(e) {
     const prev = cache[id] || {};
@@ -1692,6 +1802,22 @@ function renderAdminBody() {
         If no key or Apollo returns nothing → free website scraper runs as fallback.<br><br>
         <strong style="color:var(--ink)">What Apollo returns:</strong> Name · Job title · Work email · Phone · LinkedIn URL
       </div>
+      <div style="height:1px;background:var(--border);margin:20px 0"></div>
+      <div style="font-size:.78rem;font-weight:700;color:var(--ink);margin-bottom:10px">📊 Google Sheet Write-back (optional)</div>
+      <div class="snote" style="margin-bottom:12px">
+        To auto-update your Google Sheet when contacts are fetched, deploy your Apps Script as a <strong>web app</strong>:<br>
+        Apps Script → Deploy → New Deployment → Web app → Execute as: Me → Who has access: Anyone → Deploy → copy URL
+      </div>
+      <label class="flabel">Apps Script Web App URL</label>
+      <input type="text" class="finput" id="gasUrlInput" placeholder="https://script.google.com/macros/s/.../exec" value="${GAS_WEBAPP_URL}">
+      <div class="fbtns" style="margin-bottom:16px">
+        <button class="fbtn prime" onclick="saveGasUrl()">💾 Save URL</button>
+        <button class="fbtn danger" onclick="clearGasUrl()">✕ Remove</button>
+      </div>
+      <div style="height:1px;background:var(--border);margin:4px 0 16px"></div>
+      <div style="font-size:.78rem;font-weight:700;color:var(--ink);margin-bottom:10px">⬇ Manual Export</div>
+      <p style="font-size:.73rem;color:var(--ink3);margin-bottom:10px;line-height:1.6">Download all fetched contact data as a CSV file. Open your Google Sheet and paste it to update columns.</p>
+      <button class="fbtn prime" onclick="exportContactsCSV()">⬇ Download Contacts CSV</button>
     </div>
 `;
     renderAlist();
@@ -1708,24 +1834,41 @@ function renderAdminBody() {
 function getApolloKey() { return localStorage.getItem('cc_apollo_key') || ''; }
 function setApolloKey(k) { localStorage.setItem('cc_apollo_key', k.trim()); }
 
-/* apolloPost — routes Apollo API calls through a CORS proxy so they work
-   from a local HTML file. Apollo blocks direct browser-to-API calls. */
+/* apolloPost — Apollo API calls routed through a CORS proxy.
+   Key insight: pass api_key IN THE BODY (Apollo supports this).
+   This avoids needing a custom X-Api-Key header that proxies strip.
+   Proxy chain: corsproxy.io → allorigins → direct (last resort) */
 async function apolloPost(endpoint, body, apiKey) {
   const targetUrl = 'https://api.apollo.io/api/v1/' + endpoint;
-  // Encode the full request as a JSON payload sent to allorigins
-  // allorigins supports POST via its raw endpoint
-  const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl);
-  const resp = await fetch(proxyUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache',
-      'X-Api-Key': apiKey,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(12000),
-  });
-  return resp;
+  // Include api_key in the request body — Apollo accepts this instead of the header
+  const bodyWithKey = { ...body, api_key: apiKey };
+  const bodyStr = JSON.stringify(bodyWithKey);
+
+  // Proxies to try in order — no custom headers needed since key is in body
+  const proxies = [
+    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+  ];
+
+  let lastErr = '';
+  for (const proxyUrl of proxies) {
+    try {
+      const resp = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: bodyStr,
+        signal: AbortSignal.timeout(12000),
+      });
+      // corsproxy returns the real status; allorigins always returns 200 wrapping
+      if (resp.status === 200 || resp.status === 401 || resp.status === 422) return resp;
+      lastErr = `status ${resp.status}`;
+    } catch(e) {
+      lastErr = e.message;
+    }
+  }
+  // All proxies failed — throw so caller can handle
+  throw new Error(`Apollo unreachable via all proxies: ${lastErr}`);
 }
 
 async function apolloSearch(companyName, domain) {
@@ -1839,6 +1982,21 @@ function clearApolloKey() {
   document.getElementById('apolloKeyStatus').textContent = 'Key removed';
   document.getElementById('apolloKeyStatus').style.color = 'var(--ink3)';
   toast('Apollo key removed', 'ok');
+}
+
+function saveGasUrl() {
+  const v = document.getElementById('gasUrlInput')?.value?.trim();
+  GAS_WEBAPP_URL = v || '';
+  if (v) localStorage.setItem('cc_gas_url', v);
+  else localStorage.removeItem('cc_gas_url');
+  toast(v ? '✓ Apps Script URL saved — sheet will auto-update on fetch' : 'Apps Script URL removed', 'ok');
+}
+function clearGasUrl() {
+  GAS_WEBAPP_URL = '';
+  localStorage.removeItem('cc_gas_url');
+  const el = document.getElementById('gasUrlInput');
+  if (el) el.value = '';
+  toast('Apps Script URL removed', 'ok');
 }
 
 function doAdminLogin() {
