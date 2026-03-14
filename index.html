@@ -374,6 +374,16 @@ header{
 .clink.wa:hover{background:rgba(37,211,102,.08);border-color:#25d366;}
 .clink.copy{border-color:var(--border2);}
 .clink.copy:hover{border-color:var(--ink3);}
+.clink.connect-btn{
+  background:linear-gradient(135deg,#0a66c2,#0d7fde);
+  border-color:#0a66c2;color:#fff;font-weight:700;
+}
+.clink.connect-btn:hover{background:linear-gradient(135deg,#084f9a,#0a66c2);border-color:#084f9a;color:#fff;}
+.clink.copy-msg{
+  background:linear-gradient(135deg,var(--green),#059669);
+  border-color:var(--green);color:#fff;font-weight:700;
+}
+.clink.copy-msg:hover{background:linear-gradient(135deg,#059669,#047857);color:#fff;border-color:#047857;}
 .cpanel-general{
   display:flex;flex-direction:column;gap:5px;
   padding:9px 12px;border-radius:var(--rs);
@@ -1090,17 +1100,24 @@ function renderGrid(list) {
   });
 }
 
+/* OUTREACH MESSAGE — edit this text to change what gets copied */
+const OUTREACH_MSG = `Hi Hiring Team,
+I'm writing from the Career Development Team at a Tier-2 institute in Karnataka. We're exploring possible collaborations with your organization for guest lectures, training sessions, internships, or placement drives.
+Looking forward to connecting.
+Regards, CDC, VGI Tumkur`;
+
 /* buildPersonLinks — returns action button HTML for one HR contact */
-function buildPersonLinks(p, compact) {
-  const wa = p.phone ? `https://wa.me/${p.phone.replace(/[^0-9]/g,'')}` : '';
-  const copyData = [p.name, p.role, p.email, p.phone, p.linkedin].filter(Boolean).join(' | ');
-  return `
-    ${p.email  ? `<a class="clink email" href="mailto:${p.email}" onclick="event.stopPropagation()">✉ ${compact?'Email':p.email}</a>` : ''}
-    ${p.phone  ? `<a class="clink phone" href="tel:${p.phone}" onclick="event.stopPropagation()">☎ ${compact?'Call':p.phone}</a>` : ''}
-    ${wa       ? `<a class="clink wa" href="${wa}" target="_blank" onclick="event.stopPropagation()">💬 WhatsApp</a>` : ''}
-    ${p.linkedin ? `<a class="clink li" href="${p.linkedin}" target="_blank" onclick="event.stopPropagation()">in LinkedIn</a>` : ''}
-    ${p.email  ? `<button class="clink copy" onclick="event.stopPropagation();cpCopy(this,'${p.email.replace(/'/g,"\'")}')">⎘ Copy</button>` : ''}
-  `.trim();
+function buildPersonLinks(p) {
+  const wa    = p.phone ? 'https://wa.me/' + p.phone.replace(/[^0-9]/g,'') : '';
+  const liUrl = p.linkedin || '';
+  const parts = [];
+  if (p.email) parts.push('<a class="clink email" href="mailto:' + p.email + '" onclick="event.stopPropagation()">✉ ' + p.email + '</a>');
+  if (p.phone) parts.push('<a class="clink phone" href="tel:' + p.phone + '" onclick="event.stopPropagation()">☎ ' + p.phone + '</a>');
+  if (wa)      parts.push('<a class="clink wa" href="' + wa + '" target="_blank" onclick="event.stopPropagation()">💬 WhatsApp</a>');
+  if (liUrl)   parts.push('<a class="clink li connect-btn" href="' + liUrl + '" target="_blank" onclick="event.stopPropagation();liConnect(this)">🔗 Connect</a>');
+  parts.push('<button class="clink copy-msg" onclick="event.stopPropagation();copyMsg(this)">📋 Copy Message</button>');
+  if (p.email) parts.push('<button class="clink copy" data-val="' + p.email.replace(/"/g,'&quot;') + '" onclick="event.stopPropagation();cpCopy(this,this.dataset.val)">⎘ Email</button>');
+  return parts.join('');
 }
 
 function cpCopy(btn, text) {
@@ -1108,7 +1125,36 @@ function cpCopy(btn, text) {
     const orig = btn.textContent;
     btn.textContent = '✓';
     setTimeout(() => btn.textContent = orig, 1600);
+  }).catch(() => toast('Copy failed — try manual select', 'err'));
+}
+
+function copyMsg(btn) {
+  navigator.clipboard.writeText(OUTREACH_MSG).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    btn.style.color = 'var(--green)';
+    btn.style.borderColor = 'var(--green)';
+    setTimeout(() => {
+      btn.textContent = orig;
+      btn.style.color = '';
+      btn.style.borderColor = '';
+    }, 2000);
+  }).catch(() => {
+    // Fallback: show message in a prompt so user can copy manually
+    prompt('Copy this message (Ctrl+C):', OUTREACH_MSG);
   });
+}
+
+/* liConnect — called when Connect button clicked:
+   copies the message automatically so it's ready to paste */
+function liConnect(btn) {
+  navigator.clipboard.writeText(OUTREACH_MSG).catch(() => {});
+  // Show a brief tip near the button
+  const tip = document.createElement('div');
+  tip.textContent = '📋 Message copied — paste it in LinkedIn Add Note';
+  tip.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 18px;border-radius:10px;font-size:.75rem;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.25);font-family:Inter,sans-serif;white-space:nowrap';
+  document.body.appendChild(tip);
+  setTimeout(() => tip.remove(), 3500);
 }
 
 function cardHTML(c, i) {
@@ -1140,7 +1186,7 @@ function cardHTML(c, i) {
       peopleHTML += `<div class="cpanel-person">
         <div class="cperson-name">${p.name} ${srcBadge}</div>
         ${p.role ? `<div class="cperson-role">${p.role}${p.location ? ' · 📍 ' + p.location : ''}</div>` : ''}
-        <div class="cperson-links">${buildPersonLinks(p, false)}</div>
+        <div class="cperson-links">${buildPersonLinks(p)}</div>
       </div>`;
     });
 
@@ -1261,8 +1307,10 @@ function renderModal(c) {
         ${p.linkedin?`<div class="hrcard-detail"><span class="ico">in</span><a href="${p.linkedin}" target="_blank" style="color:var(--blue);text-decoration:none">${p.linkedin.replace('https://','')}</a></div>`:''}
         <div class="hrcard-actions">
           ${p.email?`<a class="hract" ${emailLink}>✉ Email</a>`:''}
+          ${p.linkedin?`<a class="hract li" href="${p.linkedin}" target="_blank" onclick="liConnect(this)">🔗 Connect</a>`:''}
           ${p.linkedin?`<a class="hract li" href="${p.linkedin}" target="_blank">in LinkedIn</a>`:''}
           ${waLink?`<a class="hract wa" href="${waLink}" target="_blank">💬 WhatsApp</a>`:''}
+          <button class="hract" style="background:linear-gradient(135deg,var(--green),#059669);border-color:var(--green);color:#fff;font-weight:700" onclick="copyMsg(this)">📋 Copy Message</button>
           ${p.email?`<button class="hract copy" onclick="copyHR(this,'${p.email}')">⎘ Copy Email</button>`:''}
           ${(p.email||p.phone||p.name)?`<button class="hract copy" onclick="copyHR(this,${JSON.stringify((p.name?p.name+' — ':'')+[p.role,p.email,p.phone,p.linkedin].filter(Boolean).join(' | '))})">📋 Copy All</button>`:''}
         </div>
