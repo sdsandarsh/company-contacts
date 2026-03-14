@@ -342,6 +342,55 @@ header{
 }
 .cfetch:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
 
+/* ── Inline contact panel (expands on card after fetch) ── */
+.cpanel{
+  margin-top:14px;border-top:1.5px solid var(--border);padding-top:14px;
+  display:flex;flex-direction:column;gap:10px;
+}
+.cpanel-person{
+  background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--rs);
+  padding:11px 13px;transition:border-color .2s;
+}
+.cpanel-person:hover{border-color:var(--blue-bdr);}
+.cperson-name{font-size:.82rem;font-weight:700;color:var(--ink);margin-bottom:2px;
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.cperson-role{font-size:.68rem;font-weight:600;color:var(--ink3);margin-bottom:8px;}
+.cperson-links{display:flex;gap:5px;flex-wrap:wrap;}
+.clink{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:4px 10px;border-radius:6px;font-size:.67rem;font-weight:700;
+  text-decoration:none;border:1.5px solid var(--border);background:var(--white);
+  color:var(--ink2);cursor:pointer;transition:all .18s;font-family:'Inter',sans-serif;
+  letter-spacing:.03em;
+}
+.clink:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+.clink.email{border-color:rgba(59,130,246,.3);color:#1d4ed8;}
+.clink.email:hover{background:var(--blue-bg);border-color:var(--blue);}
+.clink.phone{border-color:rgba(16,185,129,.3);color:#065f46;}
+.clink.phone:hover{background:rgba(16,185,129,.08);border-color:var(--green);}
+.clink.li{border-color:rgba(10,102,194,.3);color:#0a66c2;}
+.clink.li:hover{background:rgba(10,102,194,.08);border-color:#0a66c2;}
+.clink.wa{border-color:rgba(37,211,102,.3);color:#075e54;}
+.clink.wa:hover{background:rgba(37,211,102,.08);border-color:#25d366;}
+.clink.copy{border-color:var(--border2);}
+.clink.copy:hover{border-color:var(--ink3);}
+.cpanel-general{
+  display:flex;flex-direction:column;gap:5px;
+  padding:9px 12px;border-radius:var(--rs);
+  background:var(--bg2);border:1.5px solid var(--border);font-size:.72rem;
+}
+.cpanel-label{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--ink4);margin-bottom:6px;}
+.cpanel-more{
+  text-align:center;font-size:.68rem;font-weight:600;color:var(--blue);
+  cursor:pointer;padding:6px;border-radius:var(--rs);
+  background:var(--blue-bg);border:1px solid var(--blue-bdr);
+  transition:background .15s;
+}
+.cpanel-more:hover{background:var(--blue-bdr);}
+[data-theme="dark"] .cpanel-person{background:var(--bg2);}
+[data-theme="dark"] .clink{background:var(--bg3);}
+
 /* ═══════════════════════════════════════
    MODAL
 ═══════════════════════════════════════ */
@@ -1041,35 +1090,101 @@ function renderGrid(list) {
   });
 }
 
+/* buildPersonLinks — returns action button HTML for one HR contact */
+function buildPersonLinks(p, compact) {
+  const wa = p.phone ? `https://wa.me/${p.phone.replace(/[^0-9]/g,'')}` : '';
+  const copyData = [p.name, p.role, p.email, p.phone, p.linkedin].filter(Boolean).join(' | ');
+  return `
+    ${p.email  ? `<a class="clink email" href="mailto:${p.email}" onclick="event.stopPropagation()">✉ ${compact?'Email':p.email}</a>` : ''}
+    ${p.phone  ? `<a class="clink phone" href="tel:${p.phone}" onclick="event.stopPropagation()">☎ ${compact?'Call':p.phone}</a>` : ''}
+    ${wa       ? `<a class="clink wa" href="${wa}" target="_blank" onclick="event.stopPropagation()">💬 WhatsApp</a>` : ''}
+    ${p.linkedin ? `<a class="clink li" href="${p.linkedin}" target="_blank" onclick="event.stopPropagation()">in LinkedIn</a>` : ''}
+    ${p.email  ? `<button class="clink copy" onclick="event.stopPropagation();cpCopy(this,'${p.email.replace(/'/g,"\'")}')">⎘ Copy</button>` : ''}
+  `.trim();
+}
+
+function cpCopy(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓';
+    setTimeout(() => btn.textContent = orig, 1600);
+  });
+}
+
 function cardHTML(c, i) {
-  const ct = cache[c.id] || {};
-  const bc  = ct.scraped ? 'br' : ct.loading ? 'bl' : 'be';
-  const btx = ct.scraped ? 'fetched' : ct.loading ? 'scanning…' : 'pending';
-  const hrCount = ct.hrContacts?.length || 0;
-  const topHR = ct.hrContacts?.[0];
-  return `<div class="ccard" style="animation-delay:${i*.035}s" id="cc-${c.id}" onclick="openModal('${c.id}')">
-    <div class="ctop">
+  const ct      = cache[c.id] || {};
+  const bc      = ct.scraped ? 'br' : ct.loading ? 'bl' : 'be';
+  const btx     = ct.scraped ? 'fetched' : ct.loading ? 'scanning…' : 'pending';
+  const hrs     = ct.hrContacts || [];
+  const hrCount = hrs.length;
+  const hasData = ct.scraped;
+
+  /* ── inline contact panel (shown after fetch) ── */
+  let panel = '';
+  if (ct.loading) {
+    panel = `<div class="cpanel">
+      <div style="display:flex;align-items:center;gap:8px;font-size:.75rem;color:var(--ink3);font-weight:500">
+        <div class="spin"></div>Searching for HR contacts…
+      </div>
+    </div>`;
+  } else if (hasData) {
+    const shown = hrs.slice(0, 3); // show top 3 on card
+    let peopleHTML = '';
+
+    shown.forEach(p => {
+      const srcBadge = p.source === 'Apollo'
+        ? `<span style="font-size:.58rem;background:rgba(99,102,241,.12);color:#4338ca;border:1px solid rgba(99,102,241,.25);padding:1px 6px;border-radius:10px;font-weight:700">Apollo</span>`
+        : p.predicted
+          ? `<span style="font-size:.58rem;background:rgba(245,158,11,.12);color:#92400e;border:1px solid rgba(245,158,11,.25);padding:1px 6px;border-radius:10px;font-weight:700">Predicted</span>`
+          : '';
+      peopleHTML += `<div class="cpanel-person">
+        <div class="cperson-name">${p.name} ${srcBadge}</div>
+        ${p.role ? `<div class="cperson-role">${p.role}${p.location ? ' · 📍 ' + p.location : ''}</div>` : ''}
+        <div class="cperson-links">${buildPersonLinks(p, false)}</div>
+      </div>`;
+    });
+
+    // General contact row (email/phone from website, not Apollo)
+    let generalHTML = '';
+    const genItems = [];
+    if (ct.email)  genItems.push(`<a class="clink email" href="mailto:${ct.email}" onclick="event.stopPropagation()">✉ ${ct.email}</a>`);
+    if (ct.phone)  genItems.push(`<a class="clink phone" href="tel:${ct.phone}" onclick="event.stopPropagation()">☎ ${ct.phone}</a>`);
+    if (ct.careersPage) genItems.push(`<a class="clink" href="${ct.careersPage}" target="_blank" onclick="event.stopPropagation()">🎯 Careers</a>`);
+    if (ct.contactPage) genItems.push(`<a class="clink" href="${ct.contactPage}" target="_blank" onclick="event.stopPropagation()">📝 Enquiry</a>`);
+    if (genItems.length) {
+      generalHTML = `<div class="cpanel-general">
+        <div class="cpanel-label">Company Contact</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">${genItems.join('')}</div>
+      </div>`;
+    }
+
+    const extraCount = hrCount - shown.length;
+    panel = `<div class="cpanel">
+      ${peopleHTML || (genItems.length ? '' : `<div style="font-size:.72rem;color:var(--ink3);padding:6px 0">No HR contacts found on site — try LinkedIn search below</div>`)}
+      ${generalHTML}
+      ${extraCount > 0 ? `<div class="cpanel-more" onclick="event.stopPropagation();openModal('${c.id}')">+${extraCount} more contact${extraCount>1?'s':''} — click to view all</div>` : ''}
+      ${ct.linkedinSearch ? `<a class="clink li" href="${ct.linkedinSearch}" target="_blank" onclick="event.stopPropagation()" style="justify-content:center;font-size:.69rem">🔎 Search more HR on LinkedIn</a>` : ''}
+    </div>`;
+  }
+
+  return `<div class="ccard" style="animation-delay:${i*.035}s;cursor:default" id="cc-${c.id}">
+    <div class="ctop" style="cursor:pointer" onclick="openModal('${c.id}')">
       <img class="cfav" id="fav-${c.id}" src="" alt="${c.name}">
       <div class="cbadge ${bc}"><div class="bdot"></div>${btx}</div>
     </div>
-    <div class="cname">${c.name}${hrCount>0?`<span class="hr-count-badge">👤 ${hrCount} HR</span>`:''}</div>
-    ${c.offering ? `<span class="coffering" title="${c.offering}">${c.offering}</span>` : ''}
-    ${c.url
-      ? `<a class="curl" href="${c.url}" target="_blank" onclick="event.stopPropagation()">↗ ${dom(c.url)}</a>`
-      : (ct.loading
+    <div style="cursor:pointer" onclick="openModal('${c.id}')">
+      <div class="cname">${c.name}${hrCount>0?`<span class="hr-count-badge">👤 ${hrCount} HR</span>`:''}</div>
+      ${c.offering ? `<span class="coffering" title="${c.offering}">${c.offering}</span>` : ''}
+      ${c.url
+        ? `<a class="curl" href="${c.url}" target="_blank" onclick="event.stopPropagation()">↗ ${dom(c.url)}</a>`
+        : ct.loading
           ? `<span class="curl" style="color:var(--ink4)">Discovering website…</span>`
-          : `<span class="curl" style="color:var(--ink4)">Website will be found on fetch</span>`)
-    }
-    ${ct.careersPage ? `<a class="careers-pill" href="${ct.careersPage}" target="_blank" onclick="event.stopPropagation()">🎯 Careers Page</a>` : ''}
-    <div class="cinfos">
-      ${topHR
-        ? `<div class="ci has"><span class="ico">👤</span><span>${topHR.name}${topHR.role?` · ${topHR.role}`:''}</span></div>`
-        : `<div class="ci ${ct.email?'has':''}"><span class="ico">✉</span><span>${ct.email||'Not yet fetched'}</span></div>`
+          : `<span class="curl" style="color:var(--ink4)">No website yet — will find on fetch</span>`
       }
-      <div class="ci ${ct.phone?'has':''}"><span class="ico">☎</span><span>${ct.phone||'Phone not yet fetched'}</span></div>
     </div>
+    ${panel}
     <button class="cfetch" onclick="event.stopPropagation();fetchContact('${c.id}')">
-      ${ct.scraped ? '↻ Re-fetch' : '→ Fetch HR Contacts'}
+      ${ct.loading ? '⏳ Fetching…' : ct.scraped ? '↻ Re-fetch Contacts' : '🔍 Find HR Contacts'}
     </button>
   </div>`;
 }
