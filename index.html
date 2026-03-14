@@ -408,8 +408,10 @@ header{
 .apanel{
   width:100%;max-width:560px;background:var(--white);
   border:1.5px solid var(--border2);border-radius:var(--rx);
-  box-shadow:var(--shadow-lg);transform:scale(.96);transition:transform .25s;overflow:hidden;
+  box-shadow:var(--shadow-lg);transform:scale(.96);transition:transform .25s;
+  display:flex;flex-direction:column;max-height:90vh;overflow:hidden;
 }
+#adminBody{overflow-y:auto;flex:1;min-height:0;}
 .aoverlay.open .apanel{transform:scale(1);}
 .ahead{padding:20px 24px;background:var(--ink);display:flex;align-items:center;justify-content:space-between;}
 .ahead h3{font-family:'Sora',sans-serif;font-size:1.05rem;font-weight:700;color:#fff;letter-spacing:-.01em;}
