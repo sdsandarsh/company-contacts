@@ -454,6 +454,46 @@ header{
 @keyframes spin{to{transform:rotate(360deg)}}
 .hint{margin-top:12px;padding:12px 14px;background:var(--blue-bg);border:1.5px solid var(--blue-bdr);border-radius:var(--rs);font-size:.76rem;font-weight:500;color:var(--ink2);line-height:1.6;}
 
+/* ── LinkedIn Profile Cards (inline search results) ── */
+.li-profile-card{
+  border:1.5px solid #c7d9ee;border-radius:var(--r);padding:14px 16px;
+  margin-bottom:10px;background:linear-gradient(135deg,#f0f7ff 0%,#fff 100%);
+  transition:box-shadow .2s,border-color .2s;
+}
+[data-theme="dark"] .li-profile-card{background:rgba(10,102,194,.07);border-color:rgba(10,102,194,.25);}
+.li-profile-card:hover{box-shadow:0 4px 16px rgba(10,102,194,.12);border-color:#0a66c2;}
+.li-profile-top{display:flex;align-items:flex-start;gap:12px;margin-bottom:10px;}
+.li-avatar{
+  width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#0a66c2,#0d7fde);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.1rem;font-weight:800;color:#fff;flex-shrink:0;letter-spacing:-.02em;
+}
+.li-profile-info{flex:1;min-width:0;}
+.li-profile-name{font-size:.88rem;font-weight:700;color:var(--ink);margin-bottom:2px;}
+.li-profile-title{font-size:.72rem;font-weight:500;color:var(--ink3);line-height:1.4;}
+.li-profile-loc{font-size:.68rem;color:var(--ink4);margin-top:2px;}
+.li-profile-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.li-btn{
+  display:inline-flex;align-items:center;gap:4px;padding:5px 12px;
+  border-radius:20px;font-size:.7rem;font-weight:700;font-family:'Inter',sans-serif;
+  cursor:pointer;text-decoration:none;border:1.5px solid;transition:all .18s;letter-spacing:.02em;
+}
+.li-btn.connect{background:#0a66c2;border-color:#0a66c2;color:#fff;}
+.li-btn.connect:hover{background:#084f9a;border-color:#084f9a;}
+.li-btn.profile{background:transparent;border-color:#0a66c2;color:#0a66c2;}
+.li-btn.profile:hover{background:#e8f0fb;}
+.li-btn.msg{background:linear-gradient(135deg,#10b981,#059669);border-color:#10b981;color:#fff;}
+.li-btn.msg:hover{background:linear-gradient(135deg,#059669,#047857);}
+.li-search-loading{display:flex;align-items:center;gap:10px;padding:14px;
+  font-size:.78rem;font-weight:500;color:var(--ink3);}
+.li-connect-more{
+  width:100%;padding:10px;border-radius:var(--rs);margin-top:4px;
+  background:transparent;border:1.5px solid #0a66c2;color:#0a66c2;
+  font-family:'Inter',sans-serif;font-size:.73rem;font-weight:700;
+  cursor:pointer;transition:all .2s;text-align:center;letter-spacing:.03em;
+}
+.li-connect-more:hover{background:#0a66c2;color:#fff;}
+
 /* ═══════════════════════════════════════
    ADMIN OVERLAY
 ═══════════════════════════════════════ */
@@ -1270,7 +1310,7 @@ function renderModal(c) {
     ${c.url?`<a href="${c.url}" target="_blank" class="abtn prime">↗ Website</a>`:''}
     ${ct.careersPage?`<a href="${ct.careersPage}" target="_blank" class="abtn" style="color:#065f46;border-color:rgba(16,185,129,.35)">🎯 Careers Page</a>`:''}
     ${ct.contactPage?`<a href="${ct.contactPage}" target="_blank" class="abtn">📝 Enquiry Form</a>`:''}
-    ${ct.linkedinSearch?`<a href="${ct.linkedinSearch}" target="_blank" class="abtn li" style="font-size:.7rem">🔎 Search HR on LinkedIn</a>`:''}
+    ${ct.linkedinSearch?`<button class="abtn li" style="font-size:.7rem" onclick="searchLinkedInHR('${c.id}')">🔎 Search HR on LinkedIn</button>`:''}
     <button class="abtn" onclick="fetchContact('${c.id}')">${ct.scraped?'↻ Re-fetch':'⟳ Fetch HR Contacts'}</button>
   </div>`;
 
@@ -1318,15 +1358,15 @@ function renderModal(c) {
     });
   } else if (ct.scraped) {
     h += `<div class="hr-section-title">HR Contacts</div>
-    <div style="padding:16px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);font-size:.78rem;color:var(--ink3);margin-bottom:16px">
-      No HR contacts found on the website.<br>
-      ${ct.linkedinSearch?`<a href="${ct.linkedinSearch}" target="_blank" style="color:var(--blue);font-weight:600">🔎 Try searching HR contacts on LinkedIn →</a>`:``}
+    <div id="li-results-${c.id}" style="padding:16px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);font-size:.78rem;color:var(--ink3);margin-bottom:16px">
+      No HR contacts found on the website — click <strong>Search HR on LinkedIn</strong> above to find profiles.
     </div>`;
+  } else if (!ct.scraped) {
+    h += `<div id="li-results-${c.id}"></div>`;
   }
 
-  // ── LinkedIn search ──
-  if (ct.linkedinSearch && hrs.length === 0) {
-    // already shown in empty state above
+  if (hrs.length > 0) {
+    h += `<div id="li-results-${c.id}" style="margin-top:8px"></div>`;
   }
 
   // ── Other (social links) ──
@@ -1337,6 +1377,146 @@ function renderModal(c) {
   }
 
   document.getElementById('mbody').innerHTML = h;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LINKEDIN HR SEARCH — inline profile cards in modal
+   Strategy: Google search via CORS proxy for
+   site:linkedin.com/in "HR" "CompanyName" "Bangalore"
+   Parse result snippets to extract name, title, profile URL
+══════════════════════════════════════════════════════════════ */
+async function searchLinkedInHR(companyId) {
+  const c = companies.find(x => x.id === companyId); if (!c) return;
+  const loc  = getSearchLocation();
+  const city = loc.city || 'Bangalore';
+  const container = document.getElementById('li-results-' + companyId);
+  if (!container) return;
+
+  // Show loading state
+  container.innerHTML = `<div class="li-search-loading"><div class="spin"></div>Searching LinkedIn for HR contacts at ${c.name} in ${city}…</div>`;
+
+  const fullLiUrl = buildLinkedInSearch(c.name);
+
+  try {
+    // Build Google search query
+    const query = `site:linkedin.com/in "${c.name}" ("HR" OR "Talent Acquisition" OR "Recruiter" OR "People Operations") "${city}"`;
+    const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=10`;
+
+    const html = await proxyFetch(googleUrl);
+
+    if (!html) throw new Error('no response');
+
+    const profiles = parseLinkedInFromGoogle(html, c.name);
+
+    if (profiles.length === 0) {
+      // Retry without city filter
+      const query2 = `site:linkedin.com/in "${c.name}" ("HR Manager" OR "Talent Acquisition" OR "Recruiter")`;
+      const googleUrl2 = `https://www.google.com/search?q=${encodeURIComponent(query2)}&num=10`;
+      const html2 = await proxyFetch(googleUrl2);
+      if (html2) profiles.push(...parseLinkedInFromGoogle(html2, c.name));
+    }
+
+    if (profiles.length === 0) {
+      container.innerHTML = `
+        <div style="padding:14px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);font-size:.78rem;color:var(--ink3)">
+          Google search returned no LinkedIn profiles — this can happen due to search rate limits.<br><br>
+          <a href="${fullLiUrl}" target="_blank" class="li-btn connect" style="display:inline-flex">🔎 Search directly on LinkedIn →</a>
+        </div>`;
+      return;
+    }
+
+    renderLinkedInProfiles(container, profiles.slice(0, 4), fullLiUrl, c.name);
+
+  } catch(e) {
+    container.innerHTML = `
+      <div style="padding:14px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);font-size:.78rem;color:var(--ink3)">
+        Could not fetch search results (${e.message}).<br><br>
+        <a href="${fullLiUrl}" target="_blank" class="li-btn connect" style="display:inline-flex">🔎 Search directly on LinkedIn →</a>
+      </div>`;
+  }
+}
+
+function parseLinkedInFromGoogle(html, companyName) {
+  const profiles = [];
+  const seen = new Set();
+
+  // Strip HTML tags to get plain text blocks
+  const clean = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi,'')
+                    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi,'');
+
+  // Extract LinkedIn profile URLs
+  const urlRe = /(?:href=["']|url\?q=)(https?:\/\/(?:www\.)?linkedin\.com\/in\/[a-zA-Z0-9\-_%]+)\/?(?:[?"'])/g;
+  const snippetRe = /linkedin\.com\/in\/[a-zA-Z0-9\-_%]+[^<]{0,400}/g;
+
+  const urls = [];
+  let m;
+  while ((m = urlRe.exec(clean)) !== null) {
+    const u = m[1].split('?')[0].replace(/\/+$/, '');
+    if (!seen.has(u) && !u.includes('linkedin.com/in/in')) {
+      seen.add(u);
+      urls.push(u);
+    }
+  }
+
+  // For each URL, try to extract name + title from surrounding snippet text
+  urls.forEach(url => {
+    const slug = url.split('/in/')[1] || '';
+    // Convert slug to name guess: "ananya-sharma-12345" → "Ananya Sharma"
+    const nameParts = slug.replace(/-\d+$/, '').split('-')
+      .filter(p => p.length > 1 && !/^\d+$/.test(p))
+      .map(p => p.charAt(0).toUpperCase() + p.slice(1));
+    const nameGuess = nameParts.slice(0, 3).join(' ');
+
+    // Try to find title near this URL in the HTML
+    const urlIdx = clean.indexOf(url);
+    const snippet = urlIdx > -1 ? clean.substring(urlIdx, urlIdx + 600).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ') : '';
+
+    // Look for HR role keywords in snippet
+    const roleMatch = snippet.match(/((?:HR|Talent Acquisition|Recruiter|People Operations|HRBP|HR Manager|HR Business Partner|Staffing|Campus Recruiter|Head of HR|Chief People)[\s\S]{0,60})/i);
+    const role = roleMatch ? roleMatch[1].trim().replace(/^[-–·\s]+|[-–·\s]+$/g,'').substring(0,60) : 'HR Professional';
+
+    // Location from snippet
+    const locMatch = snippet.match(/(?:Bengaluru|Bangalore|Karnataka|India)[\s\S]{0,30}/i);
+    const location = locMatch ? locMatch[0].trim().substring(0,40) : '';
+
+    if (nameGuess && nameGuess.length > 2) {
+      profiles.push({ name: nameGuess, role, location, linkedin: url });
+    }
+  });
+
+  return profiles;
+}
+
+function renderLinkedInProfiles(container, profiles, fullSearchUrl, companyName) {
+  let html = `<div class="hr-section-title" style="margin-top:12px">LinkedIn HR Profiles Found (${profiles.length})</div>`;
+
+  profiles.forEach(p => {
+    const initials = p.name.split(' ').map(w=>w[0]||'').join('').substring(0,2).toUpperCase();
+    const colors = ['#0a66c2','#6366f1','#8b5cf6','#0891b2','#0d9488'];
+    const bg = colors[p.name.charCodeAt(0) % colors.length];
+
+    html += `<div class="li-profile-card">
+      <div class="li-profile-top">
+        <div class="li-avatar" style="background:${bg}">${initials}</div>
+        <div class="li-profile-info">
+          <div class="li-profile-name">${p.name}</div>
+          <div class="li-profile-title">${p.role}</div>
+          ${p.location ? `<div class="li-profile-loc">📍 ${p.location}</div>` : ''}
+        </div>
+      </div>
+      <div class="li-profile-actions">
+        <a class="li-btn connect" href="${p.linkedin}" target="_blank" onclick="liConnect(this)">🔗 Connect</a>
+        <a class="li-btn profile" href="${p.linkedin}" target="_blank">View Profile</a>
+        <button class="li-btn msg" onclick="copyMsg(this)">📋 Copy Message</button>
+      </div>
+    </div>`;
+  });
+
+  html += `<button class="li-connect-more" onclick="window.open('${fullSearchUrl}','_blank')">
+    🔎 Connect with more HR at ${companyName} on LinkedIn →
+  </button>`;
+
+  container.innerHTML = html;
 }
 
 function copyHR(btn, text) {
