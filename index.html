@@ -1138,6 +1138,7 @@ function renderModal(c) {
           </div>
           <span class="hr-tag ${p.predicted?'predicted':p.source==='Apollo'?'apollo':''}">${p.predicted?'Predicted':p.source==='Apollo'?'Apollo':'Found'}</span>
         </div>
+        ${p.location?`<div class="hrcard-detail" style="color:var(--ink3)"><span class="ico">📍</span>${p.location}</div>`:''}
         ${p.email?`<div class="hrcard-detail"><span class="ico">✉</span>${p.email}</div>`:''}
         ${p.phone?`<div class="hrcard-detail"><span class="ico">☎</span>${p.phone}</div>`:''}
         ${p.linkedin?`<div class="hrcard-detail"><span class="ico">in</span><a href="${p.linkedin}" target="_blank" style="color:var(--blue);text-decoration:none">${p.linkedin.replace('https://','')}</a></div>`:''}
@@ -1799,8 +1800,32 @@ function renderAdminBody() {
         When you click "Fetch HR Contacts" on any card, Apollo is tried <strong>first</strong>.<br>
         If Apollo returns results → shown instantly with full details.<br>
         If no key or Apollo returns nothing → free website scraper runs as fallback.<br><br>
-        <strong style="color:var(--ink)">What Apollo returns:</strong> Name · Job title · Work email · Phone · LinkedIn URL
+        <strong style="color:var(--ink)">What Apollo returns:</strong> Name · Job title · Work email · Phone · LinkedIn URL · Location
       </div>
+      <div style="height:1px;background:var(--border);margin:20px 0"></div>
+      <div style="font-size:.78rem;font-weight:700;color:var(--ink);margin-bottom:6px">📍 Location Filter</div>
+      <div style="font-size:.72rem;color:var(--ink3);margin-bottom:12px;line-height:1.6">
+        Apollo will search for HR contacts in this location first. If no results found there, it retries without the filter so you never miss contacts.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label class="flabel">City</label>
+          <input type="text" class="finput" id="locCity" placeholder="Bangalore" value="${getSearchLocation().city||'Bangalore'}" style="margin-bottom:0">
+        </div>
+        <div>
+          <label class="flabel">State</label>
+          <input type="text" class="finput" id="locState" placeholder="Karnataka" value="${getSearchLocation().state||'Karnataka'}" style="margin-bottom:0">
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label class="flabel">Country</label>
+        <input type="text" class="finput" id="locCountry" placeholder="India" value="${getSearchLocation().country||'India'}" style="margin-bottom:0">
+      </div>
+      <div class="fbtns" style="margin-bottom:4px">
+        <button class="fbtn prime" onclick="saveSearchLocation()">💾 Save Location</button>
+        <button class="fbtn" onclick="resetSearchLocation()">↺ Reset to Bangalore</button>
+      </div>
+      <div id="locStatus" style="font-size:.73rem;font-weight:600;color:var(--green);min-height:18px;margin-top:8px"></div>
       <div style="height:1px;background:var(--border);margin:20px 0"></div>
       <div style="font-size:.78rem;font-weight:700;color:var(--ink);margin-bottom:10px">📊 Google Sheet Write-back (optional)</div>
       <div class="snote" style="margin-bottom:12px">
@@ -1891,6 +1916,13 @@ async function apolloParse(resp) {
   }
 }
 
+/* getSearchLocation — returns the saved location filter for Apollo searches */
+function getSearchLocation() {
+  try { return JSON.parse(localStorage.getItem('cc_search_location') || 'null') || { city: 'Bangalore', state: 'Karnataka', country: 'India' }; }
+  catch(_) { return { city: 'Bangalore', state: 'Karnataka', country: 'India' }; }
+}
+function setSearchLocation(loc) { localStorage.setItem('cc_search_location', JSON.stringify(loc)); }
+
 async function apolloSearch(companyName, domain) {
   const key = getApolloKey();
   if (!key) return null;
@@ -1903,29 +1935,62 @@ async function apolloSearch(companyName, domain) {
     'Recruitment Manager','Staffing Manager','HR Director',
   ];
 
+  const loc = getSearchLocation();
+
+  // Build location filters — Apollo accepts city/state/country as separate arrays
+  const locationBody = {};
+  if (loc.city)    locationBody.person_locations = [loc.city + ', ' + (loc.state || '') + ', ' + (loc.country || '')];
+  if (loc.country) locationBody.person_country   = [loc.country];
+
   try {
-    const resp = await apolloPost('mixed_people/search', {
+    // Pass 1: strict — with location filter
+    const resp1 = await apolloPost('mixed_people/search', {
       q_organization_name: companyName,
       person_titles: hrTitles,
+      ...locationBody,
       page: 1,
       per_page: 10,
     }, key);
 
-    if (resp.status === 401) throw new Error('Invalid Apollo API key — check Admin → 🔑 API Keys');
-    if (resp.status === 422) throw new Error('Apollo: invalid request parameters');
-    if (!resp.ok) throw new Error(`Apollo API error ${resp.status}`);
+    if (resp1.status === 401) throw new Error('Invalid Apollo API key — check Admin → 🔑 API Keys');
+    if (resp1.status === 422) throw new Error('Apollo: invalid request parameters');
+    if (!resp1.ok) throw new Error('Apollo API error ' + resp1.status);
 
-    const data = await apolloParse(resp);
-    const people = data.people || [];
-    return people.map(p => ({
-      name:     p.name || '',
-      role:     p.title || '',
-      email:    p.email || null,
-      phone:    (p.phone_numbers?.[0]?.sanitized_number) || null,
-      linkedin: p.linkedin_url ? (p.linkedin_url.startsWith('http') ? p.linkedin_url : 'https://' + p.linkedin_url) : null,
-      source:   'Apollo',
-      predicted: false,
-    })).filter(p => p.name);
+    const data1 = await apolloParse(resp1);
+    let people = data1.people || [];
+
+    // Pass 2: if location filter returned nothing, retry without location
+    // (company may not have Bangalore office tagged in Apollo)
+    if (people.length === 0 && loc.city) {
+      const resp2 = await apolloPost('mixed_people/search', {
+        q_organization_name: companyName,
+        person_titles: hrTitles,
+        page: 1,
+        per_page: 10,
+      }, key);
+      if (resp2.ok) {
+        const data2 = await apolloParse(resp2);
+        people = data2.people || [];
+      }
+    }
+
+    return people.map(p => {
+      // Extract city from Apollo's city/state/country fields
+      const city    = p.city    || p.present_raw_address || '';
+      const state   = p.state   || '';
+      const country = p.country || '';
+      const location = [city, state, country].filter(Boolean).join(', ');
+      return {
+        name:      p.name     || '',
+        role:      p.title    || '',
+        email:     p.email    || null,
+        phone:     (p.phone_numbers?.[0]?.sanitized_number) || null,
+        linkedin:  p.linkedin_url ? (p.linkedin_url.startsWith('http') ? p.linkedin_url : 'https://' + p.linkedin_url) : null,
+        location:  location   || null,
+        source:    'Apollo',
+        predicted: false,
+      };
+    }).filter(p => p.name);
 
   } catch(e) {
     if (e.message.includes('API key') || e.message.includes('401')) throw e;
@@ -2022,6 +2087,30 @@ function clearApolloKey() {
   document.getElementById('apolloKeyStatus').textContent = 'Key removed';
   document.getElementById('apolloKeyStatus').style.color = 'var(--ink3)';
   toast('Apollo key removed', 'ok');
+}
+
+function saveSearchLocation() {
+  const city    = document.getElementById('locCity')?.value?.trim()    || '';
+  const state   = document.getElementById('locState')?.value?.trim()   || '';
+  const country = document.getElementById('locCountry')?.value?.trim() || '';
+  setSearchLocation({ city, state, country });
+  const locStatus = document.getElementById('locStatus');
+  const label = [city, state, country].filter(Boolean).join(', ');
+  if (locStatus) { locStatus.textContent = '✓ Location set to: ' + label; }
+  toast('📍 Location filter set to ' + label, 'ok');
+}
+function resetSearchLocation() {
+  const def = { city: 'Bangalore', state: 'Karnataka', country: 'India' };
+  setSearchLocation(def);
+  const c = document.getElementById('locCity'),
+        s = document.getElementById('locState'),
+        r = document.getElementById('locCountry');
+  if (c) c.value = def.city;
+  if (s) s.value = def.state;
+  if (r) r.value = def.country;
+  const locStatus = document.getElementById('locStatus');
+  if (locStatus) locStatus.textContent = '✓ Reset to Bangalore, Karnataka, India';
+  toast('📍 Location reset to Bangalore', 'ok');
 }
 
 function saveGasUrl() {
