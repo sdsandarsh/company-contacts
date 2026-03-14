@@ -1833,41 +1833,62 @@ function renderAdminBody() {
 function getApolloKey() { return localStorage.getItem('cc_apollo_key') || ''; }
 function setApolloKey(k) { localStorage.setItem('cc_apollo_key', k.trim()); }
 
-/* apolloPost — Apollo API calls routed through a CORS proxy.
-   Key insight: pass api_key IN THE BODY (Apollo supports this).
-   This avoids needing a custom X-Api-Key header that proxies strip.
-   Proxy chain: corsproxy.io → allorigins → direct (last resort) */
+/* ── apolloPost ──────────────────────────────────────────────────────────
+   Tries to reach Apollo's API in 4 ways, in order:
+   1. Direct fetch (works when file is served via http://, not file://)
+   2. thingproxy — designed for POST forwarding
+   3. corsproxy.io — good POST support
+   4. allorigins raw — last resort
+
+   Apollo accepts api_key in the request body, so no custom headers needed.
+────────────────────────────────────────────────────────────────────────── */
 async function apolloPost(endpoint, body, apiKey) {
   const targetUrl = 'https://api.apollo.io/api/v1/' + endpoint;
-  // Include api_key in the request body — Apollo accepts this instead of the header
-  const bodyWithKey = { ...body, api_key: apiKey };
-  const bodyStr = JSON.stringify(bodyWithKey);
+  const bodyWithKey = JSON.stringify({ ...body, api_key: apiKey });
+  const SIG = AbortSignal.timeout(13000);
 
-  // Proxies to try in order — no custom headers needed since key is in body
+  // Strategy 1: Direct call — works if opened via http:// (e.g. VS Code Live Server)
+  try {
+    const r = await fetch(targetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
+      body: bodyWithKey,
+      signal: SIG,
+    });
+    if (r.status !== 0) return r; // any real HTTP response = success
+  } catch(_) { /* CORS blocked from file:// — fall through */ }
+
+  // Strategy 2–4: CORS proxies — api_key in body, no custom headers
   const proxies = [
-    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+    [`https://thingproxy.freeboard.io/fetch/${targetUrl}`,              false],
+    [`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,          false],
+    [`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`, false],
   ];
 
-  let lastErr = '';
-  for (const proxyUrl of proxies) {
+  let lastErr = 'all proxies failed';
+  for (const [proxyUrl] of proxies) {
     try {
-      const resp = await fetch(proxyUrl, {
+      const r = await fetch(proxyUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: bodyStr,
-        signal: AbortSignal.timeout(12000),
+        body: bodyWithKey,
+        signal: AbortSignal.timeout(13000),
       });
-      // corsproxy returns the real status; allorigins always returns 200 wrapping
-      if (resp.status === 200 || resp.status === 401 || resp.status === 422) return resp;
-      lastErr = `status ${resp.status}`;
-    } catch(e) {
-      lastErr = e.message;
-    }
+      if (r.status === 200 || r.status === 401 || r.status === 403 || r.status === 422) return r;
+      if (r.status === 0) { lastErr = 'CORS blocked'; continue; }
+      lastErr = 'HTTP ' + r.status;
+    } catch(e) { lastErr = e.message || 'network error'; }
   }
-  // All proxies failed — throw so caller can handle
-  throw new Error(`Apollo unreachable via all proxies: ${lastErr}`);
+  throw new Error('PROXY_FAIL:' + lastErr);
+}
+
+/* Parse an apolloPost response — handles both direct and proxied formats */
+async function apolloParse(resp) {
+  const text = await resp.text();
+  try { return JSON.parse(text); } catch(_) {
+    // allorigins sometimes double-encodes
+    try { return JSON.parse(JSON.parse(text).contents); } catch(_) { return {}; }
+  }
 }
 
 async function apolloSearch(companyName, domain) {
@@ -1894,7 +1915,7 @@ async function apolloSearch(companyName, domain) {
     if (resp.status === 422) throw new Error('Apollo: invalid request parameters');
     if (!resp.ok) throw new Error(`Apollo API error ${resp.status}`);
 
-    const data = await resp.json();
+    const data = await apolloParse(resp);
     const people = data.people || [];
     return people.map(p => ({
       name:     p.name || '',
@@ -1921,7 +1942,7 @@ async function apolloOrgSearch(companyName) {
       q_organization_name: companyName, page: 1, per_page: 1,
     }, key);
     if (!resp.ok) return null;
-    const data = await resp.json();
+    const data = await apolloParse(resp);
     const org = data.organizations?.[0];
     if (!org) return null;
     return {
@@ -1947,30 +1968,50 @@ async function testApolloKey() {
   const v = document.getElementById('apolloKeyInput')?.value?.trim() || getApolloKey();
   if (!v) { document.getElementById('apolloKeyErr').textContent = 'No key to test'; return; }
   const statusEl = document.getElementById('apolloKeyStatus');
-  statusEl.textContent = 'Testing connection via proxy…'; statusEl.style.color = 'var(--ink3)';
+  const errEl    = document.getElementById('apolloKeyErr');
+  statusEl.textContent = '⏳ Trying direct connection…'; statusEl.style.color = 'var(--ink3)';
+  errEl.textContent = '';
+
   try {
     const resp = await apolloPost('mixed_people/search', {
       q_organization_name: 'Infosys', page: 1, per_page: 1,
     }, v);
 
-    if (resp.ok) {
-      const data = await resp.json();
+    const data = await apolloParse(resp);
+
+    if (resp.ok && (data.people !== undefined || data.pagination !== undefined)) {
       const found = data.people?.length || 0;
-      statusEl.textContent = `✓ Apollo key works! (found ${found} result${found!==1?'s':''} for test search)`;
+      statusEl.textContent = '✓ Connected! Apollo key works (found ' + found + ' result' + (found!==1?'s':'') + ')';
       statusEl.style.color = 'var(--green)';
       setApolloKey(v);
-      document.getElementById('apolloKeyErr').textContent = '';
-    } else if (resp.status === 401) {
-      statusEl.textContent = '✗ Invalid API key — double-check and try again';
+      errEl.textContent = '';
+    } else if (resp.status === 401 || data.error?.includes('401')) {
+      statusEl.textContent = '✗ Invalid API key';
       statusEl.style.color = 'var(--red)';
+      errEl.textContent = 'Double-check your key at app.apollo.io → Settings → Integrations → API';
     } else {
-      statusEl.textContent = `✗ Apollo returned status ${resp.status}`;
-      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '✓ Key accepted (status ' + resp.status + ')';
+      statusEl.style.color = 'var(--green)';
+      setApolloKey(v);
     }
   } catch(e) {
-    statusEl.textContent = '✗ Proxy unreachable — try again in a moment';
-    statusEl.style.color = 'var(--red)';
-    console.warn('Apollo test error:', e.message);
+    if (e.message.startsWith('PROXY_FAIL')) {
+      statusEl.textContent = '⚠ Could not reach Apollo via browser proxies';
+      statusEl.style.color = 'var(--amber)';
+      errEl.innerHTML = [
+        '<strong>This is a browser CORS restriction — your key may still be valid.</strong><br>',
+        'Two options to fix this:<br>',
+        '1. Open this HTML file via a local server instead of directly:<br>',
+        '&nbsp;&nbsp;• Install <a href="https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer" target="_blank" style="color:var(--blue)">VS Code Live Server</a>, right-click the file → Open with Live Server<br>',
+        '&nbsp;&nbsp;• Or run <code style="color:var(--blue)">npx serve .</code> in the same folder<br>',
+        '2. Save your key anyway — it will work if opened via http://<br>',
+        '<button class="fbtn prime" style="margin-top:8px;font-size:.68rem" onclick="setApolloKey(document.getElementById(\'apolloKeyInput\').value.trim());toast(\'Key saved — open file via Live Server to use Apollo\',\'ok\')">💾 Save key anyway</button>',
+      ].join('');
+    } else {
+      statusEl.textContent = '✗ ' + e.message;
+      statusEl.style.color = 'var(--red)';
+    }
+    console.warn('Apollo test:', e.message);
   }
 }
 
