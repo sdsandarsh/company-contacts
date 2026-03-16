@@ -1387,53 +1387,91 @@ function renderModal(c) {
 ══════════════════════════════════════════════════════════════ */
 async function searchLinkedInHR(companyId) {
   const c = companies.find(x => x.id === companyId); if (!c) return;
-  const loc  = getSearchLocation();
-  const city = loc.city || 'Bangalore';
+  const loc     = getSearchLocation();
+  const city    = loc.city || 'Bangalore';
+  const fullLiUrl = buildLinkedInSearch(c.name);
   const container = document.getElementById('li-results-' + companyId);
   if (!container) return;
 
-  // Show loading state
-  container.innerHTML = `<div class="li-search-loading"><div class="spin"></div>Searching LinkedIn for HR contacts at ${c.name} in ${city}…</div>`;
+  container.innerHTML = '<div class="li-search-loading"><div class="spin"></div>Searching for HR profiles at ' + c.name + '…</div>';
 
-  const fullLiUrl = buildLinkedInSearch(c.name);
+  // ── Strategy 1: Apollo API (if key set) — most reliable ──────────────
+  const apolloKey = getApolloKey();
+  if (apolloKey) {
+    try {
+      container.innerHTML = '<div class="li-search-loading"><div class="spin"></div>Querying Apollo for LinkedIn profiles at ' + c.name + '…</div>';
+      const resp = await apolloPost('mixed_people/search', {
+        q_organization_name: c.name,
+        person_titles: [
+          'HR Manager','Head of HR','Chief People Officer','VP of People',
+          'Talent Acquisition','Talent Partner','Head of Talent',
+          'Recruiter','Technical Recruiter','Campus Recruiter',
+          'People Operations','People Partner','HRBP','HR Business Partner',
+          'Recruitment Manager','HR Director',
+        ],
+        person_locations: [city + ', ' + (loc.state || '') + ', ' + (loc.country || 'India')],
+        page: 1, per_page: 10,
+      }, apolloKey);
 
-  try {
-    // Build Google search query
-    const query = `site:linkedin.com/in "${c.name}" ("HR" OR "Talent Acquisition" OR "Recruiter" OR "People Operations") "${city}"`;
-    const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=10`;
+      if (resp.ok) {
+        const data = await apolloParse(resp);
+        // Filter only those with a LinkedIn URL
+        const withLI = (data.people || []).filter(p => p.linkedin_url);
 
-    const html = await proxyFetch(googleUrl);
+        if (withLI.length > 0) {
+          const profiles = withLI.map(p => ({
+            name:     p.name || '',
+            role:     p.title || 'HR Professional',
+            location: [p.city, p.state, p.country].filter(Boolean).join(', '),
+            linkedin: p.linkedin_url.startsWith('http') ? p.linkedin_url : 'https://' + p.linkedin_url,
+            email:    p.email || null,
+            source:   'Apollo',
+          })).filter(p => p.name);
 
-    if (!html) throw new Error('no response');
+          renderLinkedInProfiles(container, profiles.slice(0, 4), fullLiUrl, c.name, 'Apollo');
+          return;
+        }
 
-    const profiles = parseLinkedInFromGoogle(html, c.name);
-
-    if (profiles.length === 0) {
-      // Retry without city filter
-      const query2 = `site:linkedin.com/in "${c.name}" ("HR Manager" OR "Talent Acquisition" OR "Recruiter")`;
-      const googleUrl2 = `https://www.google.com/search?q=${encodeURIComponent(query2)}&num=10`;
-      const html2 = await proxyFetch(googleUrl2);
-      if (html2) profiles.push(...parseLinkedInFromGoogle(html2, c.name));
+        // Apollo returned people but none had LinkedIn URLs — show them anyway with search fallback
+        if ((data.people || []).length > 0) {
+          const profiles = (data.people || []).map(p => ({
+            name:     p.name || '',
+            role:     p.title || 'HR Professional',
+            location: [p.city, p.state, p.country].filter(Boolean).join(', '),
+            linkedin: null,
+            email:    p.email || null,
+            source:   'Apollo',
+          })).filter(p => p.name);
+          renderLinkedInProfiles(container, profiles.slice(0, 4), fullLiUrl, c.name, 'Apollo (no LinkedIn URLs)');
+          return;
+        }
+      }
+    } catch(e) {
+      console.warn('Apollo LinkedIn search failed:', e.message);
+      // Fall through to next strategy
     }
+  }
 
-    if (profiles.length === 0) {
-      container.innerHTML = `
-        <div style="padding:14px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);font-size:.78rem;color:var(--ink3)">
-          Google search returned no LinkedIn profiles — this can happen due to search rate limits.<br><br>
-          <a href="${fullLiUrl}" target="_blank" class="li-btn connect" style="display:inline-flex">🔎 Search directly on LinkedIn →</a>
-        </div>`;
+  // ── Strategy 2: Use already-fetched HR contacts (from previous fetch) ─
+  const cached = cache[companyId];
+  if (cached && cached.hrContacts && cached.hrContacts.length > 0) {
+    const withLI = cached.hrContacts.filter(p => p.linkedin);
+    if (withLI.length > 0) {
+      renderLinkedInProfiles(container, withLI.slice(0, 4), fullLiUrl, c.name, 'Cached');
       return;
     }
-
-    renderLinkedInProfiles(container, profiles.slice(0, 4), fullLiUrl, c.name);
-
-  } catch(e) {
-    container.innerHTML = `
-      <div style="padding:14px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);font-size:.78rem;color:var(--ink3)">
-        Could not fetch search results (${e.message}).<br><br>
-        <a href="${fullLiUrl}" target="_blank" class="li-btn connect" style="display:inline-flex">🔎 Search directly on LinkedIn →</a>
-      </div>`;
   }
+
+  // ── Strategy 3: No Apollo key + no cached data → show LinkedIn search ─
+  const noKeyMsg = apolloKey ? 'Apollo returned no results for this company.' : 'No Apollo API key set — add one in Admin → 🔑 API Keys for automatic results.';
+  container.innerHTML = `
+    <div style="padding:16px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);font-size:.78rem;color:var(--ink3);line-height:1.7;margin-bottom:10px">
+      ${noKeyMsg}<br>
+      Use the button below to search LinkedIn directly — results open in a new tab.
+    </div>
+    <button class="li-connect-more" onclick="window.open('${fullLiUrl}','_blank')">
+      🔎 Search HR at ${c.name} on LinkedIn →
+    </button>`;
 }
 
 function parseLinkedInFromGoogle(html, companyName) {
@@ -1487,27 +1525,32 @@ function parseLinkedInFromGoogle(html, companyName) {
   return profiles;
 }
 
-function renderLinkedInProfiles(container, profiles, fullSearchUrl, companyName) {
-  let html = `<div class="hr-section-title" style="margin-top:12px">LinkedIn HR Profiles Found (${profiles.length})</div>`;
+function renderLinkedInProfiles(container, profiles, fullSearchUrl, companyName, source) {
+  const srcLabel = source ? `<span style="font-size:.62rem;background:rgba(99,102,241,.1);color:#4338ca;border:1px solid rgba(99,102,241,.2);padding:1px 7px;border-radius:10px;font-weight:700;margin-left:6px">${source}</span>` : '';
+  let html = `<div class="hr-section-title" style="margin-top:12px">HR LinkedIn Profiles (${profiles.length}) ${srcLabel}</div>`;
 
   profiles.forEach(p => {
     const initials = p.name.split(' ').map(w=>w[0]||'').join('').substring(0,2).toUpperCase();
-    const colors = ['#0a66c2','#6366f1','#8b5cf6','#0891b2','#0d9488'];
-    const bg = colors[p.name.charCodeAt(0) % colors.length];
+    const colors   = ['#0a66c2','#6366f1','#8b5cf6','#0891b2','#0d9488'];
+    const bg       = colors[p.name.charCodeAt(0) % colors.length];
+    const hasLI    = !!p.linkedin;
+    const emailEsc = (p.email||'').replace(/"/g,'&quot;');
 
     html += `<div class="li-profile-card">
       <div class="li-profile-top">
         <div class="li-avatar" style="background:${bg}">${initials}</div>
         <div class="li-profile-info">
           <div class="li-profile-name">${p.name}</div>
-          <div class="li-profile-title">${p.role}</div>
+          <div class="li-profile-title">${p.role || 'HR Professional'}</div>
           ${p.location ? `<div class="li-profile-loc">📍 ${p.location}</div>` : ''}
+          ${p.email    ? `<div class="li-profile-loc" style="color:var(--blue)">✉ ${p.email}</div>` : ''}
         </div>
       </div>
       <div class="li-profile-actions">
-        <a class="li-btn connect" href="${p.linkedin}" target="_blank" onclick="liConnect(this)">🔗 Connect</a>
-        <a class="li-btn profile" href="${p.linkedin}" target="_blank">View Profile</a>
+        ${hasLI ? `<a class="li-btn connect" href="${p.linkedin}" target="_blank" onclick="liConnect(this)">🔗 Connect</a>` : ''}
+        ${hasLI ? `<a class="li-btn profile" href="${p.linkedin}" target="_blank">View Profile</a>` : ''}
         <button class="li-btn msg" onclick="copyMsg(this)">📋 Copy Message</button>
+        ${p.email ? `<button class="li-btn" style="background:transparent;border-color:var(--border2);color:var(--ink2)" data-val="${emailEsc}" onclick="cpCopy(this,this.dataset.val)">⎘ Copy Email</button>` : ''}
       </div>
     </div>`;
   });
