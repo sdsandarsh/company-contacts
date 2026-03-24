@@ -934,8 +934,25 @@ const HR_DATA = [
   {id:12,init:"S",grad:"linear-gradient(135deg,#f97316,#ea580c)",name:"Sagrika Raparia",title:"Senior Manager — Human Resources",company:"Instawork",website:"instawork.com",email:"sraparia@instawork.com",phone:null,li:"https://linkedin.com/in/sagrikaraparia",focus:["HR Business Partnering","People & Culture","Talent Acquisition"]}
 ];
 
+// Restore saved contacts from localStorage
+(function(){
+  try {
+    const saved = JSON.parse(localStorage.getItem('hrh_contacts') || '[]');
+    saved.forEach(c => { if (!HR_DATA.find(d => d.id === c.id)) HR_DATA.push(c); });
+  } catch(e) {}
+})();
+
 let hrStatuses = {}, hrActiveFilter = 'all', hrSearchStr = '', hrOpenDrop = null;
-HR_DATA.forEach(d => hrStatuses[d.id] = 0);
+
+// Restore saved statuses
+(function(){
+  try {
+    const saved = JSON.parse(localStorage.getItem('hrh_statuses') || '{}');
+    HR_DATA.forEach(d => hrStatuses[d.id] = saved[d.id] ?? 0);
+  } catch(e) {
+    HR_DATA.forEach(d => hrStatuses[d.id] = 0);
+  }
+})();
 
 // ── HR Selection state ──
 let hrSelected = new Set();
