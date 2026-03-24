@@ -85,7 +85,7 @@ app.post('/logout', (req, res) => {
 });
 
 // ── Protected static files ───────────────────────────────────
-app.use(requireAuth, express.static(path.join(__dirname, 'public')));
+app.use(requireAuth, express.static(path.join(__dirname)));
 
 // ── Anthropic proxy (protected) ──────────────────────────────
 app.post('/api/messages', requireAuth, async (req, res) => {
