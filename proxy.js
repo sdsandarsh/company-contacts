@@ -19,11 +19,16 @@ const client = new Anthropic({ apiKey });
 // ── Middleware ───────────────────────────────────────────────
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.set('trust proxy', 1);
 app.use(session({
   secret: sessionKey,
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 8 * 60 * 60 * 1000 } // 8 hours
+  cookie: {
+    maxAge: 8 * 60 * 60 * 1000,
+    secure: true,
+    sameSite: 'lax'
+  }
 }));
 
 // ── Auth helpers ─────────────────────────────────────────────
