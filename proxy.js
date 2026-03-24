@@ -101,8 +101,7 @@ app.post('/api/messages', requireAuth, async (req, res) => {
       max_tokens: max_tokens || 4000,
       messages,
     };
-    if (system)      params.system      = system;
-    if (mcp_servers) params.mcp_servers = mcp_servers;
+if (system) params.system = system;
 
  const response = await client.messages.create(params, {
   headers: {
