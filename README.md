@@ -26,19 +26,23 @@ cd hr-outreach-hub
 npm install
 ```
 
-### 3. Set your Anthropic API key
+### 3. Set your environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and replace the placeholder with your real key:
+Open `.env` and fill in all three values:
 
 ```
 ANTHROPIC_API_KEY=sk-ant-api03-...
+SITE_PASSWORD=your-strong-password-here
+SESSION_SECRET=any-long-random-string
 ```
 
-Get your key at [console.anthropic.com](https://console.anthropic.com) → API Keys → Create Key.
+- Get your Anthropic key at [console.anthropic.com](https://console.anthropic.com) → API Keys → Create Key
+- `SITE_PASSWORD` is what you'll enter to log in to the app
+- `SESSION_SECRET` can be any random string — keeps sessions secure
 
 ### 4. Run the server
 
