@@ -104,7 +104,11 @@ app.post('/api/messages', requireAuth, async (req, res) => {
     if (system)      params.system      = system;
     if (mcp_servers) params.mcp_servers = mcp_servers;
 
-    const response = await client.messages.create(params);
+ const response = await client.messages.create(params, {
+  headers: {
+    'anthropic-beta': 'mcp-client-2025-04-04'
+  }
+});
     res.json(response);
   } catch (err) {
     console.error('Anthropic API error:', err.message);
