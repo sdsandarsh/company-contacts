@@ -36,6 +36,9 @@ const isLoggedIn = (req) => req.session?.auth === true;
 
 const requireAuth = (req, res, next) => {
   if (isLoggedIn(req)) return next();
+  if (req.path.startsWith('/api/')) {
+    return res.status(401).json({ error: { message: 'Session expired — please refresh and log in again.' } });
+  }
   res.redirect('/login');
 };
 
