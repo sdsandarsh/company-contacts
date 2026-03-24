@@ -1,0 +1,21 @@
+{
+  "name": "hr-outreach-hub",
+  "version": "1.0.0",
+  "description": "HR Outreach Hub — Bangalore 2026 with Claude AI Search",
+  "main": "proxy.js",
+  "scripts": {
+    "start": "node proxy.js",
+    "dev": "nodemon proxy.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
