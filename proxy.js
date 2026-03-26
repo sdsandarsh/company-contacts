@@ -1,22 +1,17 @@
 const express    = require('express');
 const session    = require('express-session');
-const Anthropic  = require('@anthropic-ai/sdk');
 const path       = require('path');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Env checks ──────────────────────────────────────────────
-const apiKey        = process.env.ANTHROPIC_API_KEY;
 const sitePass      = process.env.SITE_PASSWORD;
 const sessionKey    = process.env.SESSION_SECRET || 'change-me-in-production';
 const fullEnrichKey = process.env.FULLENRICH_API_KEY || null;
 
-if (!apiKey)   { console.error('❌  Missing ANTHROPIC_API_KEY'); process.exit(1); }
-if (!sitePass) { console.error('❌  Missing SITE_PASSWORD');     process.exit(1); }
+if (!sitePass) { console.error('❌  Missing SITE_PASSWORD'); process.exit(1); }
 if (!fullEnrichKey) console.warn('⚠️   FULLENRICH_API_KEY not set — enrichment will be skipped');
-
-const client = new Anthropic({ apiKey });
 
 // ── Middleware ───────────────────────────────────────────────
 app.use(express.json({ limit: '2mb' }));
@@ -96,25 +91,6 @@ app.post('/logout', (req, res) => {
 
 // ── Protected static files ───────────────────────────────────
 app.use(requireAuth, express.static(path.join(__dirname)));
-
-// ── Anthropic proxy (protected) ──────────────────────────────
-app.post('/api/messages', requireAuth, async (req, res) => {
-  try {
-    const { model, max_tokens, system, messages } = req.body;
-    const params = {
-      model:      model      || 'claude-sonnet-4-20250514',
-      max_tokens: max_tokens || 4000,
-      messages,
-    };
-    if (system) params.system = system;
-
-    const response = await client.messages.create(params);
-    res.json(response);
-  } catch (err) {
-    console.error('Anthropic API error:', err.message);
-    res.status(err.status || 500).json({ error: { message: err.message } });
-  }
-});
 
 // ── FullEnrich proxy (protected) ─────────────────────────────
 // Accepts: { contacts: [{ firstname, lastname, company_name, domain, linkedin_url }] }
