@@ -7,12 +7,14 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Env checks ──────────────────────────────────────────────
-const apiKey     = process.env.ANTHROPIC_API_KEY;
-const sitePass   = process.env.SITE_PASSWORD;
-const sessionKey = process.env.SESSION_SECRET || 'change-me-in-production';
+const apiKey        = process.env.ANTHROPIC_API_KEY;
+const sitePass      = process.env.SITE_PASSWORD;
+const sessionKey    = process.env.SESSION_SECRET || 'change-me-in-production';
+const fullEnrichKey = process.env.FULLENRICH_API_KEY || null;
 
 if (!apiKey)   { console.error('❌  Missing ANTHROPIC_API_KEY'); process.exit(1); }
 if (!sitePass) { console.error('❌  Missing SITE_PASSWORD');     process.exit(1); }
+if (!fullEnrichKey) console.warn('⚠️   FULLENRICH_API_KEY not set — enrichment will be skipped');
 
 const client = new Anthropic({ apiKey });
 
@@ -98,23 +100,89 @@ app.use(requireAuth, express.static(path.join(__dirname)));
 // ── Anthropic proxy (protected) ──────────────────────────────
 app.post('/api/messages', requireAuth, async (req, res) => {
   try {
-    const { model, max_tokens, system, messages, mcp_servers } = req.body;
+    const { model, max_tokens, system, messages } = req.body;
     const params = {
       model:      model      || 'claude-sonnet-4-20250514',
       max_tokens: max_tokens || 4000,
       messages,
     };
-if (system) params.system = system;
+    if (system) params.system = system;
 
- const response = await client.messages.create(params, {
-  headers: {
-    'anthropic-beta': 'mcp-client-2025-04-04'
-  }
-});
+    const response = await client.messages.create(params);
     res.json(response);
   } catch (err) {
     console.error('Anthropic API error:', err.message);
     res.status(err.status || 500).json({ error: { message: err.message } });
+  }
+});
+
+// ── FullEnrich proxy (protected) ─────────────────────────────
+// Accepts: { contacts: [{ firstname, lastname, company_name, domain, linkedin_url }] }
+// Returns: enriched contacts with verified emails + phones
+app.post('/api/enrich', requireAuth, async (req, res) => {
+  if (!fullEnrichKey) {
+    return res.status(503).json({ error: { message: 'FullEnrich API key not configured on server.' } });
+  }
+
+  const { contacts } = req.body;
+  if (!contacts || !contacts.length) {
+    return res.status(400).json({ error: { message: 'No contacts provided.' } });
+  }
+
+  try {
+    // Step 1 — Start bulk enrichment
+    const startResp = await fetch('https://app.fullenrich.com/api/v1/contact/enrich/bulk', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${fullEnrichKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: `HR Outreach Hub — ${new Date().toISOString()}`,
+        datas: contacts.map(c => ({
+          firstname:    c.firstname    || '',
+          lastname:     c.lastname     || '',
+          company_name: c.company_name || '',
+          domain:       c.domain       || '',
+          linkedin_url: c.linkedin_url || '',
+          enrich_fields: ['contact.emails', 'contact.phones']
+        }))
+      })
+    });
+
+    if (!startResp.ok) {
+      const errText = await startResp.text();
+      throw new Error(`FullEnrich error ${startResp.status}: ${errText}`);
+    }
+
+    const startData = await startResp.json();
+    const enrichmentId = startData?.id;
+    if (!enrichmentId) throw new Error('No enrichment ID returned from FullEnrich');
+
+    // Step 2 — Poll until done (max 30s)
+    const maxAttempts = 15;
+    const delay = ms => new Promise(r => setTimeout(r, ms));
+
+    for (let i = 0; i < maxAttempts; i++) {
+      await delay(2000);
+      const pollResp = await fetch(`https://app.fullenrich.com/api/v1/contact/enrich/bulk/${enrichmentId}`, {
+        headers: { 'Authorization': `Bearer ${fullEnrichKey}` }
+      });
+
+      if (!pollResp.ok) continue;
+      const pollData = await pollResp.json();
+
+      if (pollData?.status === 'done') {
+        return res.json({ results: pollData.datas || [] });
+      }
+    }
+
+    // Timed out — return empty so UI degrades gracefully
+    return res.json({ results: [], warning: 'FullEnrich timed out — try again shortly.' });
+
+  } catch (err) {
+    console.error('FullEnrich error:', err.message);
+    res.status(500).json({ error: { message: err.message } });
   }
 });
 
