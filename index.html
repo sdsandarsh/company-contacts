@@ -934,25 +934,8 @@ const HR_DATA = [
   {id:12,init:"S",grad:"linear-gradient(135deg,#f97316,#ea580c)",name:"Sagrika Raparia",title:"Senior Manager — Human Resources",company:"Instawork",website:"instawork.com",email:"sraparia@instawork.com",phone:null,li:"https://linkedin.com/in/sagrikaraparia",focus:["HR Business Partnering","People & Culture","Talent Acquisition"]}
 ];
 
-// Restore saved contacts from localStorage
-(function(){
-  try {
-    const saved = JSON.parse(localStorage.getItem('hrh_contacts') || '[]');
-    saved.forEach(c => { if (!HR_DATA.find(d => d.id === c.id)) HR_DATA.push(c); });
-  } catch(e) {}
-})();
-
 let hrStatuses = {}, hrActiveFilter = 'all', hrSearchStr = '', hrOpenDrop = null;
-
-// Restore saved statuses
-(function(){
-  try {
-    const saved = JSON.parse(localStorage.getItem('hrh_statuses') || '{}');
-    HR_DATA.forEach(d => hrStatuses[d.id] = saved[d.id] ?? 0);
-  } catch(e) {
-    HR_DATA.forEach(d => hrStatuses[d.id] = 0);
-  }
-})();
+HR_DATA.forEach(d => hrStatuses[d.id] = 0);
 
 // ── HR Selection state ──
 let hrSelected = new Set();
@@ -1593,12 +1576,14 @@ Location filter: Bengaluru / Bangalore, Karnataka, India.`;
 
     if (added > 0) {
       hrRender();
-      // Update pill count
       document.getElementById('cntLbl').textContent = HR_DATA.length + ' contacts';
-      hrShowToast(`✅ ${added} new contact${added > 1 ? 's' : ''} added to the dashboard!`);
-      aiLog(`🎉 Done! ${added} card${added > 1 ? 's' : ''} added live to the dashboard`, 'ok');
-      // Clear the textarea
+      hrShowToast(`✅ ${added} new contact${added > 1 ? 's' : ''} added! Enriching with FullEnrich…`);
+      aiLog(`🎉 ${added} card${added > 1 ? 's' : ''} added — starting FullEnrich enrichment…`, 'ok');
       document.getElementById('aiCompanyInput').value = '';
+
+      // ── FullEnrich: enrich newly added contacts ──
+      const newContacts = HR_DATA.slice(-added);
+      runFullEnrich(newContacts);
     } else {
       hrShowToast('ℹ All contacts already exist or were not found');
       aiLog('ℹ No new contacts were added', 'info');
@@ -1612,6 +1597,77 @@ Location filter: Bengaluru / Bangalore, Karnataka, India.`;
     aiRunning = false;
     btn.disabled = false;
     document.getElementById('aiSearchBtnContent').innerHTML = '✦ Search via Claude AI';
+  }
+}
+
+
+// ════════════════════════════════════════
+//  FULLENRICH ENRICHMENT
+// ════════════════════════════════════════
+async function runFullEnrich(contacts) {
+  if (!contacts || !contacts.length) return;
+
+  aiLog(`🔬 Sending ${contacts.length} contact${contacts.length > 1 ? 's' : ''} to FullEnrich for verification…`, 'info');
+
+  // Build payload — split name into first/last
+  const payload = contacts.map(c => {
+    const parts = (c.name || '').trim().split(/\s+/);
+    const firstname = parts[0] || '';
+    const lastname  = parts.slice(1).join(' ') || '';
+    const domain    = c.website ? c.website.replace(/^https?:\/\//,'').replace(/\/.*/,'') : '';
+    return {
+      firstname,
+      lastname,
+      company_name: c.company || '',
+      domain,
+      linkedin_url: c.li || ''
+    };
+  });
+
+  try {
+    const resp = await fetch('/api/enrich', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contacts: payload })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      aiLog(`⚠ FullEnrich: ${err?.error?.message || 'Unknown error'}`, 'warn');
+      return;
+    }
+
+    const data = await resp.json();
+    if (data.warning) aiLog(`⚠ ${data.warning}`, 'warn');
+
+    const results = data.results || [];
+    let enriched = 0;
+
+    results.forEach((r, i) => {
+      const contact = contacts[i];
+      if (!contact) return;
+
+      const hrContact = HR_DATA.find(d => d.id === contact.id);
+      if (!hrContact) return;
+
+      const email = r?.contact?.emails?.[0]?.value || null;
+      const phone = r?.contact?.phones?.[0]?.value || null;
+
+      if (email) { hrContact.email = email; enriched++; }
+      if (phone) { hrContact.phone = phone; }
+    });
+
+    if (enriched > 0) {
+      hrRender();
+      localStorage.setItem('hrh_contacts', JSON.stringify(HR_DATA.filter(d => d.id > 12)));
+      aiLog(`✅ FullEnrich: ${enriched} email${enriched > 1 ? 's' : ''} verified and updated on cards!`, 'ok');
+      hrShowToast(`✅ FullEnrich found ${enriched} verified email${enriched > 1 ? 's' : ''}!`);
+    } else {
+      aiLog('ℹ FullEnrich: No additional emails found for these contacts', 'info');
+    }
+
+  } catch (err) {
+    aiLog(`⚠ FullEnrich failed: ${err.message}`, 'warn');
   }
 }
 
