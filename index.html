@@ -712,27 +712,16 @@ header{position:sticky;top:0;z-index:100;background:var(--white);border-bottom:1
       <div class="hr-sp-hint">💡 <strong style="color:var(--ink2)">Company Name required</strong> to search · <a href="#" onclick="hrClearAll();return false" style="color:var(--blue)">Clear all</a></div>
     </div>
 
-    <!-- ═══ CLAUDE AI SEARCH PANEL ═══ -->
+    <!-- ═══ APOLLO SEARCH PANEL ═══ -->
     <div class="ai-panel" id="aiPanel">
       <div class="ai-panel-header">
         <div class="ai-panel-title">
-          <div class="ai-icon">✦</div>
+          <div class="ai-icon">🔍</div>
           <div>
-            <div class="ai-title-text">Claude AI Search</div>
-            <div class="ai-title-sub">Paste company names → Claude searches Vibe Prospecting → cards appear live</div>
+            <div class="ai-title-text">Apollo HR Search</div>
+            <div class="ai-title-sub">Paste company names → Apollo finds verified HR contacts → cards appear live</div>
           </div>
         </div>
-        
-      </div>
-
-      <div class="ai-setup-box" id="aiSetupBox" style="display:none">
-        <div class="ai-setup-label">Anthropic API Key <span style="color:var(--ink3);font-size:.7rem;font-weight:400">— stored only in your browser, never shared</span></div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input type="password" id="aiApiKey" class="ai-key-input" placeholder="sk-ant-api03-…" autocomplete="off">
-          <button class="ai-save-key-btn" onclick="saveApiKey()">Save Key</button>
-        </div>
-        <div class="ai-key-hint">Get your key at <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a> → API Keys → Create Key</div>
-        <div id="aiKeyStatus" class="ai-key-status"></div>
       </div>
 
       <!-- Search input -->
@@ -741,10 +730,10 @@ header{position:sticky;top:0;z-index:100;background:var(--white);border-bottom:1
         <textarea id="aiCompanyInput" class="ai-textarea" placeholder="Flipkart&#10;Swiggy&#10;Zomato&#10;HDFC Bank&#10;Accenture India"></textarea>
         <div class="ai-search-footer">
           <div class="ai-search-note" id="aiSearchNote">
-            <span id="aiKeyIndicator" class="ai-key-ready">✅ API key loaded from server — ready to search!</span>
+            <span id="aiKeyIndicator" class="ai-key-ready">✅ Apollo key active — ready to search!</span>
           </div>
-          <button class="ai-search-btn" id="aiSearchBtn" onclick="runAiSearch()">
-            <span id="aiSearchBtnContent">✦ Search via Claude AI</span>
+          <button class="ai-search-btn" id="aiSearchBtn" onclick="runApolloSearch()">
+            <span id="aiSearchBtnContent">🔍 Search via Apollo</span>
           </button>
         </div>
       </div>
@@ -1337,56 +1326,10 @@ function cpCopy(btn,val){navigator.clipboard.writeText(val).then(()=>{const o=bt
 function liConnect(el){const o=el.innerHTML;el.innerHTML='✓ Sent!';setTimeout(()=>el.innerHTML=o,3000);}
 
 // ════════════════════════════════════════
-//  CLAUDE AI SEARCH ENGINE
+//  APOLLO + FULLENRICH SEARCH ENGINE
 // ════════════════════════════════════════
-const AI_MODEL   = 'claude-sonnet-4-20250514';
-const VIBEPROSPECTING_MCP_URL = 'https://vibeprospecting.explorium.ai/mcp';
-const AI_KEY_STORE = 'hrh_anthropic_key';
-
 let aiRunning = false;
 
-/* ── Key management ── */
-let _storedApiKey=''; function getApiKey() { return _storedApiKey; }
-
-function saveApiKey() {
-  const val = document.getElementById('aiApiKey').value.trim();
-  const status = document.getElementById('aiKeyStatus');
-  if (!val || !val.startsWith('sk-')) {
-    status.textContent = '✕ Key must start with sk-…';
-    status.className = 'ai-key-status ai-key-err';
-    return;
-  }
-  _storedApiKey = val;
-  status.textContent = '✅ Key saved — ready to search!';
-  status.className = 'ai-key-status ai-key-ok';
-  updateKeyIndicator();
-  setTimeout(() => { document.getElementById('aiSetupBox').style.display = 'none'; }, 1200);
-}
-
-function updateKeyIndicator() {
-  const ind = document.getElementById('aiKeyIndicator');
-  if (!ind) return;
-  if (getApiKey()) {
-    ind.textContent = '✅ API key set — ready to search!';
-    ind.className = 'ai-key-ready';
-  } else {
-    ind.textContent = '⚠ No API key set — click ⚙ API Key above to add yours';
-    ind.className = 'ai-no-key';
-  }
-}
-
-function toggleApiSetup() {
-  const box = document.getElementById('aiSetupBox');
-  const isHidden = box.style.display === 'none';
-  box.style.display = isHidden ? 'block' : 'none';
-  if (isHidden) {
-    const k = getApiKey();
-    if (k) document.getElementById('aiApiKey').value = k;
-    setTimeout(() => document.getElementById('aiApiKey').focus(), 80);
-  }
-}
-
-/* ── Log helpers ── */
 function aiLog(msg, type = 'info') {
   const log = document.getElementById('aiLog');
   log.style.display = 'flex';
@@ -1404,26 +1347,14 @@ function aiClearLog() {
   log.style.display = 'none';
 }
 
-/* ── Main search function ── */
-async function runAiSearch() {
+async function runApolloSearch() {
   if (aiRunning) return;
 
   const raw = document.getElementById('aiCompanyInput').value.trim();
-  if (!raw) {
-    hrShowToast('⚠ Paste at least one company name first');
-    return;
-  }
+  if (!raw) { hrShowToast('⚠ Paste at least one company name first'); return; }
 
-  // Parse company names — split by newline or comma
-  const companies = raw
-    .split(/[\n,]+/)
-    .map(s => s.trim())
-    .filter(Boolean);
-
-  if (!companies.length) {
-    hrShowToast('⚠ No company names found');
-    return;
-  }
+  const companies = raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+  if (!companies.length) { hrShowToast('⚠ No company names found'); return; }
 
   aiRunning = true;
   aiClearLog();
@@ -1432,243 +1363,122 @@ async function runAiSearch() {
   document.getElementById('aiSearchBtnContent').innerHTML = '<span class="ai-spin"></span> Searching…';
 
   aiLog(`🔎 Searching ${companies.length} compan${companies.length > 1 ? 'ies' : 'y'}: ${companies.join(', ')}`, 'info');
-  aiLog('⏳ Connecting to Claude AI + Vibe Prospecting…', 'info');
 
-  const systemPrompt = `You are an HR contact finder for a Training & Placement coordinator at a BCA college in Bangalore, India.
+  const GRAD_POOL = [
+    'linear-gradient(135deg,#7c3aed,#4f7cff)',
+    'linear-gradient(135deg,#059669,#0ea5e9)',
+    'linear-gradient(135deg,#dc2626,#f97316)',
+    'linear-gradient(135deg,#0891b2,#6366f1)',
+    'linear-gradient(135deg,#be185d,#9333ea)',
+    'linear-gradient(135deg,#b45309,#d97706)',
+  ];
 
-When the user gives you company names, use the Vibe Prospecting MCP tools to search for HR, Talent Acquisition, or People & Culture professionals at those companies who are based in Bengaluru / Bangalore, Karnataka, India.
+  let totalAdded = 0;
 
-After searching, respond with ONLY a valid JSON array. No markdown, no explanation, no code fences — just the raw JSON array.
-
-Each object in the array must have these exact fields:
-{
-  "name": "Full name of the HR person",
-  "title": "Their job title",
-  "company": "Company name",
-  "website": "company website domain only, e.g. infosys.com",
-  "email": "work email or empty string if not found",
-  "phone": "phone number or empty string if not found",
-  "linkedin": "full LinkedIn profile URL or empty string if not found",
-  "focus": ["tag1", "tag2", "tag3"]
-}
-
-If no contacts are found for a company, include an entry with name empty string and note in title "No contacts found".
-If you find multiple contacts for one company, include all of them as separate objects.
-
-Focus on: HR Managers, Talent Acquisition Specialists, Recruiters, People Operations leads, HRBP roles.
-Location filter: Bengaluru / Bangalore, Karnataka, India.`;
-
-  const userMessage = `Find HR and Talent Acquisition contacts at these companies in Bangalore, India:\n\n${companies.join('\n')}`;
-
-  try {
-    aiLog('🌐 Calling Anthropic API with Vibe Prospecting MCP…', 'info');
-
-    const resp = await fetch('/api/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: AI_MODEL,
-        max_tokens: 4000,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-        mcp_servers: [{
-          type: 'url',
-          url: VIBEPROSPECTING_MCP_URL,
-          name: 'vibe-prospecting'
-        }]
-      })
-    });
-
-    if (!resp.ok) {
-      const errData = await resp.json().catch(() => ({}));
-      const errMsg = errData?.error?.message || `HTTP ${resp.status}`;
-      throw new Error(errMsg);
-    }
-
-    const data = await resp.json();
-    aiLog('✅ Response received from Claude AI', 'ok');
-
-    // Extract text from response content blocks
-    const textBlocks = (data.content || [])
-      .filter(b => b.type === 'text')
-      .map(b => b.text)
-      .join('');
-
-    if (!textBlocks) {
-      throw new Error('No text in response — Claude may still be processing. Try again.');
-    }
-
-    // Parse JSON — strip any accidental markdown fences
-    let parsed;
+  for (const company of companies) {
+    aiLog(`🏢 Searching Apollo for HR contacts at ${company}…`, 'info');
     try {
-      const clean = textBlocks
-        .replace(/```json\s*/gi, '')
-        .replace(/```\s*/g, '')
-        .trim();
-      // Find JSON array in response
-      const match = clean.match(/\[[\s\S]*\]/);
-      if (!match) throw new Error('No JSON array found in response');
-      parsed = JSON.parse(match[0]);
-    } catch (e) {
-      aiLog(`⚠ Could not parse JSON: ${e.message}`, 'warn');
-      aiLog('Raw response: ' + textBlocks.substring(0, 200) + '…', 'warn');
-      throw new Error('Claude returned unexpected format. Please try again.');
+      const apolloKey = getApolloKey();
+      if (!apolloKey) {
+        aiLog('⚠ No Apollo API key — go to Company Scout → Admin → API Keys to add yours', 'warn');
+        hrShowToast('⚠ Apollo key missing — add it in Admin → API Keys');
+        break;
+      }
+
+      const hrTitles = ['HR Manager','Talent Acquisition','Recruiter','People Operations','HRBP','HR Business Partner','Recruitment Manager','Campus Recruiter','Technical Recruiter'];
+      const loc = getSearchLocation();
+
+      // Search Apollo for HR people at this company
+      const apolloResp = await apolloPost('mixed_people/search', {
+        q_organization_name: company,
+        person_titles: hrTitles,
+        person_locations: [`${loc.city}, ${loc.state}, ${loc.country}`],
+        page: 1,
+        per_page: 5
+      }, apolloKey);
+
+      if (!apolloResp.ok) {
+        aiLog(`⚠ Apollo error for ${company}: HTTP ${apolloResp.status}`, 'warn');
+        continue;
+      }
+
+      const apolloData = await apolloParse(apolloResp);
+      const people = apolloData.people || [];
+
+      if (!people.length) {
+        aiLog(`ℹ No HR contacts found on Apollo for ${company}`, 'info');
+        continue;
+      }
+
+      aiLog(`✅ Apollo found ${people.length} contact${people.length > 1 ? 's' : ''} at ${company}`, 'ok');
+
+      const maxId = Math.max(...HR_DATA.map(d => typeof d.id === 'number' ? d.id : 0), 100);
+      let nextId = maxId + 1;
+      let added = 0;
+
+      for (const p of people) {
+        if (!p.name) continue;
+        const exists = HR_DATA.some(d =>
+          d.name.toLowerCase() === p.name.toLowerCase() &&
+          d.company.toLowerCase() === company.toLowerCase()
+        );
+        if (exists) continue;
+
+        const grad = GRAD_POOL[nextId % GRAD_POOL.length];
+        const init = (p.name.trim()[0] || '?').toUpperCase();
+        const website = p.organization?.website_url?.replace(/^https?:\/\//,'').replace(/\/.*/,'') || '';
+        const li = p.linkedin_url ? (p.linkedin_url.startsWith('http') ? p.linkedin_url : 'https://' + p.linkedin_url) : '';
+
+        const newContact = {
+          id:      nextId++,
+          init,
+          grad,
+          name:    p.name.trim(),
+          title:   p.title || 'HR Professional',
+          company: company,
+          website,
+          email:   p.email || null,
+          phone:   p.phone_numbers?.[0]?.sanitized_number || null,
+          li,
+          focus:   ['HR / Talent'],
+          source:  'Apollo'
+        };
+
+        HR_DATA.push(newContact);
+        hrStatuses[newContact.id] = 0;
+        added++;
+        totalAdded++;
+        aiLog(`✅ Added: ${p.name} @ ${company}${p.email ? ' · ' + p.email : ''}`, 'ok');
+      }
+
+      if (added > 0) {
+        hrRender();
+        document.getElementById('cntLbl').textContent = HR_DATA.length + ' contacts';
+        localStorage.setItem('hrh_contacts', JSON.stringify(HR_DATA.filter(d => d.id > 12)));
+
+        // Run FullEnrich on newly added contacts to get verified emails
+        const newContacts = HR_DATA.slice(-added);
+        if (newContacts.some(c => !c.email)) {
+          aiLog(`🔬 Running FullEnrich to verify emails for ${added} contact${added > 1 ? 's' : ''}…`, 'info');
+          await runFullEnrich(newContacts);
+        }
+      }
+
+    } catch (err) {
+      aiLog(`✕ Error searching ${company}: ${err.message}`, 'err');
     }
-
-    if (!Array.isArray(parsed) || !parsed.length) {
-      aiLog('ℹ No contacts found in database for these companies', 'warn');
-      hrShowToast('⚠ No HR contacts found for those companies');
-      return;
-    }
-
-    // Inject new cards
-    let added = 0;
-    let skipped = 0;
-    const maxId = Math.max(...HR_DATA.map(d => typeof d.id === 'number' ? d.id : 0), 100);
-    let nextId = maxId + 1;
-
-    const GRAD_POOL = [
-      'linear-gradient(135deg,#7c3aed,#4f7cff)',
-      'linear-gradient(135deg,#059669,#0ea5e9)',
-      'linear-gradient(135deg,#dc2626,#f97316)',
-      'linear-gradient(135deg,#0891b2,#6366f1)',
-      'linear-gradient(135deg,#be185d,#9333ea)',
-      'linear-gradient(135deg,#b45309,#d97706)',
-    ];
-
-    for (const p of parsed) {
-      if (!p.name || p.name.trim() === '') { skipped++; continue; }
-
-      // Avoid duplicates by name+company
-      const exists = HR_DATA.some(d =>
-        d.name.toLowerCase() === p.name.toLowerCase() &&
-        d.company.toLowerCase() === (p.company || '').toLowerCase()
-      );
-      if (exists) { skipped++; continue; }
-
-      const grad = GRAD_POOL[nextId % GRAD_POOL.length];
-      const init = (p.name.trim()[0] || '?').toUpperCase();
-
-      const newContact = {
-        id:      nextId++,
-        init,
-        grad,
-        name:    p.name.trim(),
-        title:   p.title || 'HR Professional',
-        company: p.company || '',
-        website: (p.website || '').replace(/^https?:\/\//i, '').replace(/\/$/, ''),
-        email:   p.email   || null,
-        phone:   p.phone   || null,
-        li:      p.linkedin && p.linkedin.startsWith('http') ? p.linkedin : (p.linkedin ? 'https://' + p.linkedin : ''),
-        focus:   Array.isArray(p.focus) ? p.focus.slice(0, 3) : ['HR / Talent'],
-        source:  'Claude AI'
-      };
-
-      HR_DATA.push(newContact);
-      hrStatuses[newContact.id] = 0;
-      added++;
-      aiLog(`✅ Added: ${p.name} @ ${p.company}${p.email ? ' · ' + p.email : ''}`, 'ok');
-    }
-
-    if (skipped > 0) aiLog(`ℹ ${skipped} skipped (duplicates or no name)`, 'info');
-
-    if (added > 0) {
-      hrRender();
-      document.getElementById('cntLbl').textContent = HR_DATA.length + ' contacts';
-      hrShowToast(`✅ ${added} new contact${added > 1 ? 's' : ''} added! Enriching with FullEnrich…`);
-      aiLog(`🎉 ${added} card${added > 1 ? 's' : ''} added — starting FullEnrich enrichment…`, 'ok');
-      document.getElementById('aiCompanyInput').value = '';
-
-      // ── FullEnrich: enrich newly added contacts ──
-      const newContacts = HR_DATA.slice(-added);
-      runFullEnrich(newContacts);
-    } else {
-      hrShowToast('ℹ All contacts already exist or were not found');
-      aiLog('ℹ No new contacts were added', 'info');
-    }
-
-  } catch (err) {
-    aiLog(`✕ Error: ${err.message}`, 'err');
-    hrShowToast('✕ Search failed — ' + err.message.substring(0, 60));
-    console.error('AI Search error:', err);
-  } finally {
-    aiRunning = false;
-    btn.disabled = false;
-    document.getElementById('aiSearchBtnContent').innerHTML = '✦ Search via Claude AI';
   }
-}
 
-
-// ════════════════════════════════════════
-//  FULLENRICH ENRICHMENT
-// ════════════════════════════════════════
-async function runFullEnrich(contacts) {
-  if (!contacts || !contacts.length) return;
-
-  aiLog(`🔬 Sending ${contacts.length} contact${contacts.length > 1 ? 's' : ''} to FullEnrich for verification…`, 'info');
-
-  // Build payload — split name into first/last
-  const payload = contacts.map(c => {
-    const parts = (c.name || '').trim().split(/\s+/);
-    const firstname = parts[0] || '';
-    const lastname  = parts.slice(1).join(' ') || '';
-    const domain    = c.website ? c.website.replace(/^https?:\/\//,'').replace(/\/.*/,'') : '';
-    return {
-      firstname,
-      lastname,
-      company_name: c.company || '',
-      domain,
-      linkedin_url: c.li || ''
-    };
-  });
-
-  try {
-    const resp = await fetch('/api/enrich', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contacts: payload })
-    });
-
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      aiLog(`⚠ FullEnrich: ${err?.error?.message || 'Unknown error'}`, 'warn');
-      return;
-    }
-
-    const data = await resp.json();
-    if (data.warning) aiLog(`⚠ ${data.warning}`, 'warn');
-
-    const results = data.results || [];
-    let enriched = 0;
-
-    results.forEach((r, i) => {
-      const contact = contacts[i];
-      if (!contact) return;
-
-      const hrContact = HR_DATA.find(d => d.id === contact.id);
-      if (!hrContact) return;
-
-      const email = r?.contact?.emails?.[0]?.value || null;
-      const phone = r?.contact?.phones?.[0]?.value || null;
-
-      if (email) { hrContact.email = email; enriched++; }
-      if (phone) { hrContact.phone = phone; }
-    });
-
-    if (enriched > 0) {
-      hrRender();
-      localStorage.setItem('hrh_contacts', JSON.stringify(HR_DATA.filter(d => d.id > 12)));
-      aiLog(`✅ FullEnrich: ${enriched} email${enriched > 1 ? 's' : ''} verified and updated on cards!`, 'ok');
-      hrShowToast(`✅ FullEnrich found ${enriched} verified email${enriched > 1 ? 's' : ''}!`);
-    } else {
-      aiLog('ℹ FullEnrich: No additional emails found for these contacts', 'info');
-    }
-
-  } catch (err) {
-    aiLog(`⚠ FullEnrich failed: ${err.message}`, 'warn');
+  if (totalAdded > 0) {
+    hrShowToast(`✅ ${totalAdded} new contact${totalAdded > 1 ? 's' : ''} added!`);
+    document.getElementById('aiCompanyInput').value = '';
+  } else {
+    hrShowToast('ℹ No new contacts found — try different company names');
   }
+
+  aiRunning = false;
+  btn.disabled = false;
+  document.getElementById('aiSearchBtnContent').innerHTML = '🔍 Search via Apollo';
 }
 
 // Init key indicator on load
